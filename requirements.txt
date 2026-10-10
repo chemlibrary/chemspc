@@ -1,0 +1,3 @@
+fastapi>=0.141.1
+chemlibrary_chempy>=2.4.6
+mariadb>=1.1.14

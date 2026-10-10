@@ -1,0 +1,21 @@
+[project]
+name = "cruise-control"
+version = "0.0.2"
+authors = [
+  { name="Chem", email="codechem@proton.me" },
+]
+description = "A war driving system for handling raw data."
+readme = "README.md"
+requires-python = ">=3.12.3"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "GPL-3.0-or-later"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/chemlibrary/cruise-control"
+
+[tool.fastapi]
+entrypoint = "main:app"
