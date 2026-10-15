@@ -28,7 +28,7 @@ def get_gen2_party_list(save_bytes):
     party_pokemon = []
     for i in range(party_count):
         pokemon = Pokemon()
-        pokemon.init_gen2(data=party_list_bytes[(8 + (i * 48)):(8 + (i * 48) + 48)])
+        pokemon.init_gen2(data=party_list_bytes[(8 + (i * 48)):(8 + (i * 48) + 48)], party_pokemon=True)
         pokemon.original_trainer_name = decode_gen2_text(party_list_bytes[(party_ots_start_byte + (i * 11)):(party_ots_start_byte + (i * 11) + 11)])
         pokemon.name = decode_gen2_text(party_list_bytes[(party_names_start_byte + (i * 11)):(party_names_start_byte + (i * 11) + 11)])
         party_pokemon.append(pokemon)
@@ -40,14 +40,9 @@ def decode_gen2_text(data: bytes, *, stop_at_terminator: bool = True) -> str:
     """Pokemon uses a custom encoding for text strings.
     This function will decode characters in English Pokémon Gen II text."""
     chars = {}
-
-    # A–Z: 0x80–0x99; a–z: 0xA0–0xB9
-    chars.update({0x80 + i: chr(ord("A") + i) for i in range(26)})
-    chars.update({0xA0 + i: chr(ord("a") + i) for i in range(26)})
-
-    # Digits: 0xF6–0xFF
-    chars.update({0xF6 + i: str(i) for i in range(10)})
-
+    chars.update({0x80 + i: chr(ord("A") + i) for i in range(26)}) # A–Z: 0x80–0x99
+    chars.update({0xA0 + i: chr(ord("a") + i) for i in range(26)}) # a–z: 0xA0–0xB9
+    chars.update({0xF6 + i: str(i) for i in range(10)}) # Digits: 0xF6–0xFF
     chars.update({
         0x7F: " ",
         0xE3: "-",
@@ -70,19 +65,16 @@ def decode_gen2_text(data: bytes, *, stop_at_terminator: bool = True) -> str:
         0xF5: "♀",
         0xEF: "♂",
     })
-
     result = []
     for byte in data:
-        if byte == 0x50:  # End of string
+        if byte == 0x50: # End of string
             if stop_at_terminator:
                 break
             continue
-
-        if byte == 0x4F:  # Line break
+        if byte == 0x4F: # Line break
             result.append("\n")
         else:
             result.append(chars.get(byte, f"[{byte:02X}]"))
-
     return "".join(result)
 
 
@@ -92,7 +84,6 @@ def encode_gen2_text(text: str, *, add_terminator: bool = True) -> bytes:
     chars = {
         " ": 0x7F,
         "-": 0xE3,
-        "_": 0x5F,  # Custom mapping; not a standard printable English Gen II character
         "(": 0x9A,
         ")": 0x9B,
         ":": 0x9C,
@@ -112,20 +103,16 @@ def encode_gen2_text(text: str, *, add_terminator: bool = True) -> bytes:
         "♀": 0xF5,
         "\n": 0x4F,
     }
-
     chars.update({chr(ord("A") + i): 0x80 + i for i in range(26)})
     chars.update({chr(ord("a") + i): 0xA0 + i for i in range(26)})
     chars.update({str(i): 0xF6 + i for i in range(10)})
-
     encoded = bytearray()
     for char in text:
         if char not in chars:
             raise ValueError(f"Character not supported: {char!r}")
         encoded.append(chars[char])
-
     if add_terminator:
         encoded.append(0x50)
-
     return bytes(encoded)
 
 
