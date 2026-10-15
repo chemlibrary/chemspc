@@ -28,17 +28,10 @@ def get_gen2_party_list(save_bytes):
     party_pokemon = []
     for i in range(party_count):
         pokemon = Pokemon()
-
         pokemon.init_gen2(data=party_list_bytes[(8 + (i * 48)):(8 + (i * 48) + 48)])
-        
-        #pokemon.original_trainer_name = party_list_bytes[(party_ots_start_byte + (i * 11)):(party_ots_start_byte + (i * 11) + 11)]
         pokemon.original_trainer_name = decode_gen2_text(party_list_bytes[(party_ots_start_byte + (i * 11)):(party_ots_start_byte + (i * 11) + 11)])
-        
-        #pokemon.name = party_list_bytes[(party_names_start_byte + (i * 11)):(party_names_start_byte + (i * 11) + 11)]
         pokemon.name = decode_gen2_text(party_list_bytes[(party_names_start_byte + (i * 11)):(party_names_start_byte + (i * 11) + 11)])
-
         party_pokemon.append(pokemon)
-
     return party_pokemon
 
 
@@ -92,6 +85,48 @@ def decode_gen2_text(data: bytes, *, stop_at_terminator: bool = True) -> str:
 
     return "".join(result)
 
+
+
+def encode_gen2_text(text: str, *, add_terminator: bool = True) -> bytes:
+    """Encode text using the same common English Gen II mappings as the decoder."""
+    chars = {
+        " ": 0x7F,
+        "-": 0xE3,
+        "_": 0x5F,  # Custom mapping; not a standard printable English Gen II character
+        "(": 0x9A,
+        ")": 0x9B,
+        ":": 0x9C,
+        ";": 0x9D,
+        "[": 0x9E,
+        "]": 0x9F,
+        "'": 0xE0,
+        "?": 0xE6,
+        "!": 0xE7,
+        ".": 0xE8,
+        "&": 0xE9,
+        "é": 0xEA,
+        "♂": 0xEF,
+        "×": 0xF1,
+        "/": 0xF3,
+        ",": 0xF4,
+        "♀": 0xF5,
+        "\n": 0x4F,
+    }
+
+    chars.update({chr(ord("A") + i): 0x80 + i for i in range(26)})
+    chars.update({chr(ord("a") + i): 0xA0 + i for i in range(26)})
+    chars.update({str(i): 0xF6 + i for i in range(10)})
+
+    encoded = bytearray()
+    for char in text:
+        if char not in chars:
+            raise ValueError(f"Character not supported: {char!r}")
+        encoded.append(chars[char])
+
+    if add_terminator:
+        encoded.append(0x50)
+
+    return bytes(encoded)
 
 
 
