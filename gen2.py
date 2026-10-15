@@ -36,6 +36,46 @@ def get_gen2_party_list(save_bytes):
 
 
 
+
+### BUG: This seems to be duplicating the last pokemon in the boxes :(
+
+def get_gen2_pokemon_boxes(save_bytes):
+    """
+    Pokemon Storage Boxes (Gen 2):
+    Stored as Pokémon lists with a capacity of 20 Pokémon in English save files, and an entry size of 32 bytes.
+    The total length of the segment is 22080 bytes (20 boxes).
+    Each box list is 1102 bytes long followed by the two bytes FF00 (total length 1104 bytes).
+
+    capacity length = 1
+    species list = 21
+    pokemon data length = 640
+    names length = 440
+    end bytes = 2
+    
+    """
+    box_lists_start_byte = 16384
+    list_len = 1104
+    box_lists_bytes = save_bytes[box_lists_start_byte:(box_lists_start_byte+22080)] # Length of boxes is 22080 bytes
+    box_pokemon = []
+    for i in range(20):
+        box = box_lists_bytes[(i * box_lists_start_byte):((i * box_lists_start_byte) + list_len)]
+        box_contents_count = int.from_bytes(box[0:1], byteorder='big')
+        box_ots_start_byte = (22 + (20 * 32)) # Starts after the initial 22 bytes and 20 x 32 byte pokemon blocks
+        box_names_start_byte = box_ots_start_byte + (11 * 20) # Starts after the original trainer names block
+        if box_contents_count > 0:
+            for x in range(20):
+                pokemon = Pokemon()
+                try:
+                    pokemon.init_gen2(data=box[(22 + (x * 32)):(22 + (x * 32) + 32)])
+                    if pokemon.species != 0:
+                        pokemon.original_trainer_name = decode_gen2_text(box[(box_ots_start_byte + (x * 11)):(box_ots_start_byte + (x * 11) + 11)])
+                        pokemon.name = decode_gen2_text(box[(box_names_start_byte + (x * 11)):(box_names_start_byte + (x * 11) + 11)])
+                        box_pokemon.append(pokemon)
+                except:
+                    continue
+    return box_pokemon
+
+
 def decode_gen2_text(data: bytes, *, stop_at_terminator: bool = True) -> str:
     """Pokemon uses a custom encoding for text strings.
     This function will decode characters in English Pokémon Gen II text."""
