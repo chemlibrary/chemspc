@@ -1,39 +1,39 @@
 class Pokemon:
     def __init__(
             self,
-            generation=0,
-            name='',
-            species=0,
-            held_item=0,
-            move1=0,
-            move2=0,
-            move3=0,
-            move4=0,
-            original_trainer=0,
-            original_trainer_name='',
-            exp=0,
-            hp_ev=0,
-            attack_ev=0,
-            defense_ev=0,
-            speed_ev=0,
-            special_ev=0,
-            iv=0,
-            move1_pp=0, 
-            move2_pp=0,
-            move3_pp=0,
-            move4_pp=0,
-            friendship=0,
-            pokerus=0,
-            caught=0,
-            level=0,
-            status_condition=0,
-            current_hp=0,
-            max_hp=0,
-            attack=0,
-            defense=0,
-            speed=0,
-            special_attack=0,
-            special_defense=0
+            generation:int=0,
+            name:str='',
+            species:int=0,
+            held_item:int=0,
+            move1:int=0,
+            move2:int=0,
+            move3:int=0,
+            move4:int=0,
+            original_trainer:int=0,
+            original_trainer_name:str='',
+            exp:int=0,
+            hp_ev:int=0,
+            attack_ev:int=0,
+            defense_ev:int=0,
+            speed_ev:int=0,
+            special_ev:int=0,
+            iv:int=0,
+            move1_pp:int=0, 
+            move2_pp:int=0,
+            move3_pp:int=0,
+            move4_pp:int=0,
+            friendship:int=0,
+            pokerus:int=0,
+            caught:int=0,
+            level:int=0,
+            status_condition:int=0,
+            current_hp:int=0,
+            max_hp:int=0,
+            attack:int=0,
+            defense:int=0,
+            speed:int=0,
+            special_attack:int=0,
+            special_defense:int=0
             ):
         self.generation=generation,
         self.name=name,
@@ -105,5 +105,13 @@ class Pokemon:
             self.speed=int.from_bytes(data[42:44], byteorder='big')
             self.special_attack=int.from_bytes(data[44:46], byteorder='big')
             self.special_defense=int.from_bytes(data[46:48], byteorder='big')
+        else:
+            self.current_hp=0
+            self.max_hp=0
+            self.attack=0
+            self.defense=0
+            self.speed=0
+            self.special_attack=0
+            self.special_defense=0
 
 
