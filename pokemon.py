@@ -2,6 +2,7 @@ class Pokemon:
     def __init__(
             self,
             generation=0,
+            name='',
             species=0,
             held_item=0,
             move1=0,
@@ -9,6 +10,7 @@ class Pokemon:
             move3=0,
             move4=0,
             original_trainer=0,
+            original_trainer_name='',
             exp=0,
             hp_ev=0,
             attack_ev=0,
@@ -34,6 +36,7 @@ class Pokemon:
             special_defense=0
             ):
         self.generation=generation,
+        self.name=name,
         self.species=species,
         self.held_item=held_item,
         self.move1=move1,
@@ -41,6 +44,7 @@ class Pokemon:
         self.move3=move3,
         self.move4=move4,
         self.original_trainer=original_trainer,
+        self.original_trainer_name=original_trainer_name,
         self.exp=exp,
         self.hp_ev=hp_ev,
         self.attack_ev=attack_ev,
@@ -64,6 +68,8 @@ class Pokemon:
         self.speed=speed,
         self.special_attack=special_attack,
         self.special_defense=special_defense
+
+
 
     def init_gen2(self, data, party_pokemon:bool=False):
         ## Gen 2 Pokemon in the party list consist of 48 bytes each
