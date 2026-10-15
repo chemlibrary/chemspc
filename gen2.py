@@ -8,6 +8,12 @@ class Gen2_Save:
         self.save_bytes = b''
         self.party_pokemon = []
         self.box_pokemon = []
+        
+        ### TODO: Implement these:
+        #self.money = 0
+        #self.pokedex = []
+        #self.items = []
+
         if path != None:
             self.path = path
             if os.path.isfile(self.path):
@@ -15,16 +21,19 @@ class Gen2_Save:
                     with open(self.path, "rb") as file:
                         length = 32768 # Length in bytes of a gen 2 save file (ensure emulator data is stripped) 
                         self.save_bytes = file.read(length) # EN party list has a length of 428 bytes
+                        self.party_pokemon = self.get_gen2_party_pokemon()
+                        self.box_pokemon = self.get_gen2_pokemon_boxes()
                 except:
                     print('[FAIL] Could not read save file!')
                     exit(1)
-                self.party_pokemon = self.get_gen2_party_pokemon()
-                self.box_pokemon = self.get_gen2_pokemon_boxes()
             else:
                 bytes_safe_write(path=path, contents=self.save_bytes)
         else:
             self.path = './gen2-save.save'
 
+
+    #def update_checksums(self):
+        #...
 
 
     def get_all_pokemon(self):
@@ -72,9 +81,6 @@ class Gen2_Save:
 
 
 
-
-    ### BUG: This seems to be duplicating the last pokemon in the boxes :(
-
     def get_gen2_pokemon_boxes(self):
         """
         Pokemon Storage Boxes (Gen 2):
@@ -97,17 +103,16 @@ class Gen2_Save:
             box_contents_count = int.from_bytes(box[0:1], byteorder='big')
             box_ots_start_byte = (22 + (20 * 32)) # Starts after the initial 22 bytes and 20 x 32 byte pokemon blocks
             box_names_start_byte = box_ots_start_byte + (11 * 20) # Starts after the original trainer names block
-            if box_contents_count > 0:
-                for x in range(20):
-                    pokemon = Pokemon()
-                    try:
-                        pokemon.init_gen2(data=box[(22 + (x * 32)):(22 + (x * 32) + 32)], party_pokemon=False)
-                        if pokemon.species != 0:
-                            pokemon.original_trainer_name = decode_gen2_text(box[(box_ots_start_byte + (x * 11)):(box_ots_start_byte + (x * 11) + 11)])
-                            pokemon.name = decode_gen2_text(box[(box_names_start_byte + (x * 11)):(box_names_start_byte + (x * 11) + 11)])
-                            box_pokemon.append(pokemon)
-                    except:
-                        continue
+            for x in range(box_contents_count):
+                pokemon = Pokemon()
+                try:
+                    pokemon.init_gen2(data=box[(22 + (x * 32)):(22 + (x * 32) + 32)], party_pokemon=False)
+                    if pokemon.species != 0:
+                        pokemon.original_trainer_name = decode_gen2_text(box[(box_ots_start_byte + (x * 11)):(box_ots_start_byte + (x * 11) + 11)])
+                        pokemon.name = decode_gen2_text(box[(box_names_start_byte + (x * 11)):(box_names_start_byte + (x * 11) + 11)])
+                        box_pokemon.append(pokemon)
+                except:
+                    continue
         return box_pokemon
 
 
