@@ -15,8 +15,11 @@ def import_gen2(path:str):
     save.print_all_pokemon()
 
     ### TODO: This eventually should selectively add pokemon using a UI !!!
-    for pokemon in save.get_all_pokemon():
+    for pokemon in save.party_pokemon:
         add_pokemon(pokemon)
+    for box in save.box_pokemon:
+        for pokemon in box:
+            add_pokemon(pokemon)
 
     ### TODO: Get the rest of the save data (items, money, etc...) !!!
 

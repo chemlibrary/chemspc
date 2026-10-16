@@ -1,14 +1,21 @@
 from pokemon import Pokemon
 from chempy.files import bytes_safe_write
+from chempy.primitives import get_bytes
 import os
 
 
 class Gen2_Save:
     def __init__(self, path:str = None):
-        self.save_bytes = b''
+        self.save_size = 32768
+        self.party_list_start_offset = 10378 # Offset from start of save file where the party list starts
+        self.party_ots_start_offset = (8 + (6 * 48)) # Offset from start of party list where original trainer names start
+        self.party_names_start_offset = self.party_ots_start_offset + (11 * 6) # Offset from start of party list where pokemon names start
+        self.box_lists_start_offset = 16384 # Offset from start of save file where pokemon box lists start
+        self.save_bytes = bytes(self.save_size)
         self.party_pokemon = []
         self.box_pokemon = []
         
+
         ### TODO: Implement these:
         #self.money = 0
         #self.pokedex = []
@@ -19,8 +26,7 @@ class Gen2_Save:
             if os.path.isfile(self.path):
                 try:
                     with open(self.path, "rb") as file:
-                        length = 32768 # Length in bytes of a gen 2 save file (ensure emulator data is stripped) 
-                        self.save_bytes = file.read(length) # EN party list has a length of 428 bytes
+                        self.save_bytes = file.read(self.save_size)
                         self.party_pokemon = self.get_gen2_party_pokemon()
                         self.box_pokemon = self.get_gen2_pokemon_boxes()
                 except:
@@ -32,18 +38,93 @@ class Gen2_Save:
             self.path = './gen2-save.save'
 
 
-    #def update_checksums(self):
-        #...
+    """def update_checksums(self):
+        #..."""
 
-
-    def get_all_pokemon(self):
-        return self.party_pokemon + self.box_pokemon
 
 
 
     def print_all_pokemon(self):
         for pokemon in self.party_pokemon: print(f'{pokemon.name} (#{pokemon.species}) - lvl {pokemon.level}')
-        for pokemon in self.box_pokemon: print(f'{pokemon.name} (#{pokemon.species}) - lvl {pokemon.level}')
+        for box in self.box_pokemon:
+            for pokemon in box:
+                print(f'{pokemon.name} (#{pokemon.species}) - lvl {pokemon.level}')
+
+
+    def export_gen2_party_list(self):
+        party_list = bytearray()
+        pokemon_list = bytearray()
+        species = bytearray()
+        names = bytearray()
+        ots = bytearray()
+
+        party_list.append(get_bytes(len(self.party_pokemon), 1)) # Append the count byte
+
+        for pokemon in self.party_pokemon: # Append the species indecies to the species block
+            species.append(get_bytes(pokemon.species, 1))
+            names.append(encode_gen2_text(text=pokemon.name))
+            ots.append(encode_gen2_text(text=pokemon.original_trainer_name))
+            pokemon_list.append(pokemon.export_gen2(party_pokemon=True))
+
+        party_list.append(0xFF) # Species list is followed by a terminator
+        names.append(0xFF) # Names list is followed by a terminator
+        ots.append(0xFF) # Original Trainers list is followed by a terminator
+
+        if len(self.party_pokemon) < 6: # Blank the remaining space for species, pokemon list, names, and original trainers if the party is not full
+            species.append(bytes(6 - len(self.party_pokemon)))
+            names.append(bytes(11 * (6 - len(self.party_pokemon))))
+            ots.append(bytes(11 * (6 - len(self.party_pokemon))))
+            pokemon_list.append(bytes(48 * (6 - len(self.party_pokemon))))
+
+        # Combine the pieces (the count is already added)
+        party_list = party_list + species
+        party_list = party_list + pokemon_list
+        party_list = party_list + names
+        party_list = party_list + ots
+
+        ### DEBUG:
+        print(f'party list export length: {len(party_list)}')
+
+        return party_list
+
+
+
+    def export_gen2_boxes(self):
+        boxes = bytearray()
+        for box in self.box_pokemon:
+            pokemon_list = bytearray()
+            species = bytearray()
+            names = bytearray()
+            ots = bytearray()
+
+            boxes.append(get_bytes(len(box), 1)) # Append the count byte
+
+            for pokemon in box: # Append the species indecies to the species block
+                species.append(get_bytes(pokemon.species, 1))
+                pokemon_list.append(pokemon.export_gen2(party_pokemon=False))
+                names.append(encode_gen2_text(text=pokemon.name))
+                ots.append(encode_gen2_text(text=pokemon.original_trainer_name))
+
+            species.append(0xFF) # Species list is followed by a terminator
+            names.append(0xFF) # Names list is followed by a terminator
+            ots.append(0xFF) # Original Trainers list is followed by a terminator
+
+            if len(box) < 20: # Blank the remaining space for species, pokemon list, names, and original trainers if the box is not full
+                species.append(bytes(20 - len(box)))
+                names.append(bytes(11 * (20 - len(box))))
+                ots.append(bytes(11 * (20 - len(box))))
+                pokemon_list.append(bytes(32 * (20 - len(box))))
+
+            # Combine the pieces (the count is already added)
+            boxes = boxes + species
+            boxes = boxes + pokemon_list
+            boxes = boxes + names
+            boxes = boxes + ots
+
+        ### DEBUG:
+        print(f'boxes export length: {len(boxes)}')
+
+        return boxes
 
     
 
@@ -64,18 +145,17 @@ class Gen2_Save:
         Next, each pokemon in the party segement is 48 bytes long.
         Finally, there are 11 bytes for each name, and 11 for each OT name (10 each plus terminators)
         """
-        party_list_start_byte = 10378 # Start of party list in save file
-        party_list_bytes = self.save_bytes[party_list_start_byte:(party_list_start_byte+428)] # Length of party list is 428 bytes
+        
+        party_list_bytes = self.save_bytes[self.party_list_start_offset:(self.party_list_start_offset+428)] # Length of party list is 428 bytes
         party_count = int.from_bytes(party_list_bytes[0:1], byteorder='big') # Get the number of pokemon in the current party
-        party_ots_start_byte = (8 + (6 * 48)) # Starts after the initial 8 bytes and 6 x 48 byte pokemon blocks
-        party_names_start_byte = party_ots_start_byte + (11 * 6) # Starts after the original trainer names block
+        
         ### TODO: Need to check in bytes 1 - 6 for species 0xFD which indicates an egg!
         party_pokemon = []
         for i in range(party_count):
             pokemon = Pokemon()
             pokemon.init_gen2(data=party_list_bytes[(8 + (i * 48)):(8 + (i * 48) + 48)], party_pokemon=True)
-            pokemon.original_trainer_name = decode_gen2_text(party_list_bytes[(party_ots_start_byte + (i * 11)):(party_ots_start_byte + (i * 11) + 11)])
-            pokemon.name = decode_gen2_text(party_list_bytes[(party_names_start_byte + (i * 11)):(party_names_start_byte + (i * 11) + 11)])
+            pokemon.original_trainer_name = decode_gen2_text(party_list_bytes[(self.party_ots_start_offset + (i * 11)):(self.party_ots_start_offset + (i * 11) + 11)])
+            pokemon.name = decode_gen2_text(party_list_bytes[(self.party_names_start_offset + (i * 11)):(self.party_names_start_offset + (i * 11) + 11)])
             party_pokemon.append(pokemon)
         return party_pokemon
 
@@ -94,12 +174,13 @@ class Gen2_Save:
         end bytes = 2
         
         """
-        box_lists_start_byte = 16384
+        
         list_len = 1104
-        box_lists_bytes = self.save_bytes[box_lists_start_byte:(box_lists_start_byte+22080)] # Length of boxes is 22080 bytes
+        box_lists_bytes = self.save_bytes[self.box_lists_start_offset:(self.box_lists_start_offset+22080)] # Length of boxes is 22080 bytes
         box_pokemon = []
         for i in range(20):
-            box = box_lists_bytes[(i * box_lists_start_byte):((i * box_lists_start_byte) + list_len)]
+            box_contents = []
+            box = box_lists_bytes[(i * self.box_lists_start_offset):((i * self.box_lists_start_offset) + list_len)]
             box_contents_count = int.from_bytes(box[0:1], byteorder='big')
             box_ots_start_byte = (22 + (20 * 32)) # Starts after the initial 22 bytes and 20 x 32 byte pokemon blocks
             box_names_start_byte = box_ots_start_byte + (11 * 20) # Starts after the original trainer names block
@@ -110,9 +191,10 @@ class Gen2_Save:
                     if pokemon.species != 0:
                         pokemon.original_trainer_name = decode_gen2_text(box[(box_ots_start_byte + (x * 11)):(box_ots_start_byte + (x * 11) + 11)])
                         pokemon.name = decode_gen2_text(box[(box_names_start_byte + (x * 11)):(box_names_start_byte + (x * 11) + 11)])
-                        box_pokemon.append(pokemon)
+                        box_contents.append(pokemon)
                 except:
                     continue
+            box_pokemon.append(box_contents)
         return box_pokemon
 
 
@@ -195,4 +277,3 @@ def encode_gen2_text(text: str, *, add_terminator: bool = True) -> bytes:
     if add_terminator:
         encoded.append(0x50)
     return bytes(encoded)
-

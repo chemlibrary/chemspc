@@ -1,3 +1,5 @@
+from chempy.primitives import get_int, get_bytes
+
 class Pokemon:
     def __init__(
             self,
@@ -115,5 +117,41 @@ class Pokemon:
             self.special_defense = 0
 
 
-def get_int(bytes):
-    return int.from_bytes(bytes, byteorder = 'big')
+    def export_gen2(self, party_pokemon:bool = False):
+        size = 32
+        if party_pokemon:
+            size = 48
+        raw = bytearray()
+        raw.append(get_bytes(self.species, 1))
+        raw.append(get_bytes(self.held_item, 1))
+        raw.append(get_bytes(self.move1, 1))
+        raw.append(get_bytes(self.move2, 1))
+        raw.append(get_bytes(self.move3, 1))
+        raw.append(get_bytes(self.move4, 1))
+        raw.append(get_bytes(self.original_trainer, 2))
+        raw.append(get_bytes(self.exp, 2))
+        raw.append(get_bytes(self.hp_ev, 2))
+        raw.append(get_bytes(self.attack_ev, 2))
+        raw.append(get_bytes(self.defense_ev, 2))
+        raw.append(get_bytes(self.speed_ev, 2))
+        raw.append(get_bytes(self.special_ev, 2))
+        raw.append(get_bytes(self.iv, 2))
+        raw.append(get_bytes(self.move1_pp, 1))
+        raw.append(get_bytes(self.move2_pp, 1))
+        raw.append(get_bytes(self.move3_pp, 1))
+        raw.append(get_bytes(self.move4_pp, 1))
+        raw.append(get_bytes(self.friendship, 1))
+        raw.append(get_bytes(self.pokerus, 1))
+        raw.append(get_bytes(self.caught, 2))
+        raw.append(get_bytes(self.level, 1))
+        raw.append(get_bytes(self.status_condition, 1))
+        raw.append(get_bytes(0, 1)) # Unused byte
+        if party_pokemon:
+            raw.append(get_bytes(self.current_hp, 2))
+            raw.append(get_bytes(self.max_hp, 2))
+            raw.append(get_bytes(self.attack, 2))
+            raw.append(get_bytes(self.defense, 2))
+            raw.append(get_bytes(self.speed, 2))
+            raw.append(get_bytes(self.special_attack, 2))
+            raw.append(get_bytes(self.special_defense, 2))
+        return bytes(raw)
