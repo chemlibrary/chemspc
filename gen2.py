@@ -11,7 +11,7 @@ class Gen2_Save:
         self.party_ots_start_offset = (8 + (6 * 48)) # Offset from start of party list where original trainer names start
         self.party_names_start_offset = self.party_ots_start_offset + (11 * 6) # Offset from start of party list where pokemon names start
         self.box_lists_start_offset = 16384 # Offset from start of save file where pokemon box lists start
-        self.save_bytes = bytes(self.save_size)
+        self.save_bytes = bytearray(self.save_size)
         self.party_pokemon = []
         self.box_pokemon = []
         
@@ -27,8 +27,8 @@ class Gen2_Save:
                 try:
                     with open(self.path, "rb") as file:
                         self.save_bytes = file.read(self.save_size)
-                        self.party_pokemon = self.get_gen2_party_pokemon()
-                        self.box_pokemon = self.get_gen2_pokemon_boxes()
+                        self.party_pokemon = self.extract_gen2_party_pokemon()
+                        self.box_pokemon = self.extract_gen2_pokemon_boxes()
                 except:
                     print('[FAIL] Could not read save file!')
                     exit(1)
@@ -38,9 +38,28 @@ class Gen2_Save:
             self.path = './gen2-save.save'
 
 
-    """def update_checksums(self):
-        #..."""
 
+    def update_gold_silver_checksums(self):
+        primary_checksum = sum(self.save_bytes[8201:11624])
+        primary_checksum_offset = 11625
+        secondary_checksum = sum(self.save_bytes[3179:6124])
+        secondary_checksum = secondary_checksum + sum(self.save_bytes[15766:16191])
+        secondary_checksum = secondary_checksum + sum(self.save_bytes[32313:32364])
+        secondary_checksum_offset = 32365
+        self.save_bytes[primary_checksum_offset] = get_bytes(primary_checksum, 1)
+        self.save_bytes[secondary_checksum_offset] = get_bytes(secondary_checksum, 1)
+        return True
+
+
+
+    def update_crystal_checksums(self):
+        primary_checksum = sum(self.save_bytes[8201:11138])
+        primary_checksum_offset = 11533
+        secondary_checksum = sum(self.save_bytes[4617:7554])
+        secondary_checksum_offset = 7949
+        self.save_bytes[primary_checksum_offset] = get_bytes(primary_checksum, 1)
+        self.save_bytes[secondary_checksum_offset] = get_bytes(secondary_checksum, 1)
+        return True
 
 
 
@@ -49,6 +68,25 @@ class Gen2_Save:
         for box in self.box_pokemon:
             for pokemon in box:
                 print(f'{pokemon.name} (#{pokemon.species}) - lvl {pokemon.level}')
+
+
+    def write_save(self, gold_silver:bool = True):
+        party_list = self.export_gen2_party_list()
+        boxes = self.export_gen2_boxes()
+
+        # Inject party list into the save bytes
+        self.save_bytes = self.save_bytes[:self.party_list_start_offset] + party_list + self.save_bytes[(self.party_list_start_offset + 428):]
+
+        # Inject boxes into the save bytes
+        self.save_bytes = self.save_bytes[:self.box_lists_start_offset] + boxes + self.save_bytes[(self.party_list_start_offset + 1104):]
+
+        if gold_silver:
+            self.update_gold_silver_checksums()
+        else:
+            self.update_crystal_checksums()
+
+        return bytes_safe_write(path=f'{self.path}.new', contents=self.save_bytes)
+
 
 
     def export_gen2_party_list(self):
@@ -108,18 +146,24 @@ class Gen2_Save:
             species.append(0xFF) # Species list is followed by a terminator
             names.append(0xFF) # Names list is followed by a terminator
             ots.append(0xFF) # Original Trainers list is followed by a terminator
-
-            if len(box) < 20: # Blank the remaining space for species, pokemon list, names, and original trainers if the box is not full
-                species.append(bytes(20 - len(box)))
-                names.append(bytes(11 * (20 - len(box))))
-                ots.append(bytes(11 * (20 - len(box))))
-                pokemon_list.append(bytes(32 * (20 - len(box))))
-
+            
             # Combine the pieces (the count is already added)
             boxes = boxes + species
             boxes = boxes + pokemon_list
             boxes = boxes + names
             boxes = boxes + ots
+            boxes.append(0xFF)
+            boxes.append(0xFF)
+
+            ### NOTE: This may not be needed (if partially filled boxes should not be followed by empty space, the total empty spaces will need to be tracked and add to the end):
+            if len(box) < 20: # Blank the remaining space for species, pokemon list, names, and original trainers if the box is not full
+                boxes.append(bytes(20 - len(box))) # Blank extra species space
+                boxes.append(bytes(11 * (20 - len(box)))) # Blank extra names space
+                boxes.append(bytes(11 * (20 - len(box)))) # Blank extra ots space
+                boxes.append(bytes(32 * (20 - len(box)))) # Blank extra pokemon list space
+
+
+            
 
         ### DEBUG:
         print(f'boxes export length: {len(boxes)}')
@@ -136,7 +180,7 @@ class Gen2_Save:
 
 
 
-    def get_gen2_party_pokemon(self):
+    def extract_gen2_party_pokemon(self):
         """
         Pokemon Party List (Gen 2):
         The total length of the segment is 428 bytes.
@@ -161,7 +205,7 @@ class Gen2_Save:
 
 
 
-    def get_gen2_pokemon_boxes(self):
+    def extract_gen2_pokemon_boxes(self):
         """
         Pokemon Storage Boxes (Gen 2):
         Stored as Pokémon lists with a capacity of 20 Pokémon in English save files, and an entry size of 32 bytes.
