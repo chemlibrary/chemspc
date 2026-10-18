@@ -98,8 +98,8 @@ class Pokemon:
         self.pokerus = get_int(data[28:29])
         self.caught = get_int(data[29:31])
         self.level = get_int(data[31:32])
-        self.status_condition = get_int(data[32:33])
         if party_pokemon:
+            self.status_condition = get_int(data[32:33])
             self.current_hp = get_int(data[34:36])
             self.max_hp = get_int(data[36:38])
             self.attack = get_int(data[38:40])
@@ -108,6 +108,7 @@ class Pokemon:
             self.special_attack = get_int(data[44:46])
             self.special_defense = get_int(data[46:48])
         else:
+            self.status_condition = 0
             self.current_hp = 0
             self.max_hp = 0
             self.attack = 0
@@ -118,40 +119,37 @@ class Pokemon:
 
 
     def export_gen2(self, party_pokemon:bool = False):
-        size = 32
-        if party_pokemon:
-            size = 48
         raw = bytearray()
-        raw.append(get_bytes(self.species, 1))
-        raw.append(get_bytes(self.held_item, 1))
-        raw.append(get_bytes(self.move1, 1))
-        raw.append(get_bytes(self.move2, 1))
-        raw.append(get_bytes(self.move3, 1))
-        raw.append(get_bytes(self.move4, 1))
-        raw.append(get_bytes(self.original_trainer, 2))
-        raw.append(get_bytes(self.exp, 2))
-        raw.append(get_bytes(self.hp_ev, 2))
-        raw.append(get_bytes(self.attack_ev, 2))
-        raw.append(get_bytes(self.defense_ev, 2))
-        raw.append(get_bytes(self.speed_ev, 2))
-        raw.append(get_bytes(self.special_ev, 2))
-        raw.append(get_bytes(self.iv, 2))
-        raw.append(get_bytes(self.move1_pp, 1))
-        raw.append(get_bytes(self.move2_pp, 1))
-        raw.append(get_bytes(self.move3_pp, 1))
-        raw.append(get_bytes(self.move4_pp, 1))
-        raw.append(get_bytes(self.friendship, 1))
-        raw.append(get_bytes(self.pokerus, 1))
-        raw.append(get_bytes(self.caught, 2))
-        raw.append(get_bytes(self.level, 1))
-        raw.append(get_bytes(self.status_condition, 1))
-        raw.append(get_bytes(0, 1)) # Unused byte
+        raw.append(self.species)
+        raw.append(self.held_item)
+        raw.append(self.move1)
+        raw.append(self.move2)
+        raw.append(self.move3)
+        raw.append(self.move4)
+        raw.extend(get_bytes(self.original_trainer, 2))
+        raw.extend(get_bytes(self.exp, 3))
+        raw.extend(get_bytes(self.hp_ev, 2))
+        raw.extend(get_bytes(self.attack_ev, 2))
+        raw.extend(get_bytes(self.defense_ev, 2))
+        raw.extend(get_bytes(self.speed_ev, 2))
+        raw.extend(get_bytes(self.special_ev, 2))
+        raw.extend(get_bytes(self.iv, 2))
+        raw.append(self.move1_pp)
+        raw.append(self.move2_pp)
+        raw.append(self.move3_pp)
+        raw.append(self.move4_pp)
+        raw.append(self.friendship)
+        raw.append(self.pokerus)
+        raw.extend(get_bytes(self.caught, 2))
+        raw.append(self.level)
         if party_pokemon:
-            raw.append(get_bytes(self.current_hp, 2))
-            raw.append(get_bytes(self.max_hp, 2))
-            raw.append(get_bytes(self.attack, 2))
-            raw.append(get_bytes(self.defense, 2))
-            raw.append(get_bytes(self.speed, 2))
-            raw.append(get_bytes(self.special_attack, 2))
-            raw.append(get_bytes(self.special_defense, 2))
-        return bytes(raw)
+            raw.append(self.status_condition)
+            raw.append(0) # Unused byte
+            raw.extend(get_bytes(self.current_hp, 2))
+            raw.extend(get_bytes(self.max_hp, 2))
+            raw.extend(get_bytes(self.attack, 2))
+            raw.extend(get_bytes(self.defense, 2))
+            raw.extend(get_bytes(self.speed, 2))
+            raw.extend(get_bytes(self.special_attack, 2))
+            raw.extend(get_bytes(self.special_defense, 2))
+        return raw

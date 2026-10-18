@@ -21,11 +21,17 @@ def import_gen2(path:str):
         for pokemon in box:
             add_pokemon(pokemon)
 
+
     ### TODO: Get the rest of the save data (items, money, etc...) !!!
 
     ### TODO: Remove imported pokemon from the save file !!!
 
 
+    ### TESTING:
+    save.party_pokemon.pop()
+    save.write_save()
+
+
 if __name__ == '__main__':
     
-    import_gen2('/home/user/Desktop/pokemon-gold-test.srm')
+    import_gen2('/home/user/Desktop/pokemon-gold-test.sav')
