@@ -1,80 +1,87 @@
+"""Pokémon data model and Generation II record conversion."""
+
 from chempy.primitives import get_int, get_bytes
+
 
 class Pokemon:
     def __init__(
-            self,
-            generation:int = 0,
-            name:str = '',
-            species:int = 0,
-            held_item:int = 0,
-            move1:int = 0,
-            move2:int = 0,
-            move3:int = 0,
-            move4:int = 0,
-            original_trainer:int = 0,
-            original_trainer_name:str = '',
-            exp:int = 0,
-            hp_ev:int = 0,
-            attack_ev:int = 0,
-            defense_ev:int = 0,
-            speed_ev:int = 0,
-            special_ev:int = 0,
-            iv:int = 0,
-            move1_pp:int = 0, 
-            move2_pp:int = 0,
-            move3_pp:int = 0,
-            move4_pp:int = 0,
-            friendship:int = 0,
-            pokerus:int = 0,
-            caught:int = 0,
-            level:int = 0,
-            status_condition:int = 0,
-            current_hp:int = 0,
-            max_hp:int = 0,
-            attack:int = 0,
-            defense:int = 0,
-            speed:int = 0,
-            special_attack:int = 0,
-            special_defense:int = 0
-            ):
-        self.generation = generation,
-        self.name = name,
-        self.species = species,
-        self.held_item = held_item,
-        self.move1 = move1,
-        self.move2 = move2,
-        self.move3 = move3,
-        self.move4 = move4,
-        self.original_trainer = original_trainer,
-        self.original_trainer_name = original_trainer_name,
-        self.exp = exp,
-        self.hp_ev = hp_ev,
-        self.attack_ev = attack_ev,
-        self.defense_ev = defense_ev,
-        self.speed_ev = speed_ev,
-        self.special_ev = special_ev,
-        self.iv = iv,
-        self.move1_pp = move1_pp, 
-        self.move2_pp = move2_pp,
-        self.move3_pp = move3_pp,
-        self.move4_pp = move4_pp,
-        self.friendship = friendship,
-        self.pokerus = pokerus,
-        self.caught = caught,
-        self.level = level,
-        self.status_condition = status_condition,
-        self.current_hp = current_hp,
-        self.max_hp = max_hp,
-        self.attack = attack,
-        self.defense = defense,
-        self.speed = speed,
-        self.special_attack = special_attack,
+        self,
+        generation: int = 0,
+        name: str = "",
+        species: int = 0,
+        held_item: int = 0,
+        move1: int = 0,
+        move2: int = 0,
+        move3: int = 0,
+        move4: int = 0,
+        original_trainer: int = 0,
+        original_trainer_name: str = "",
+        exp: int = 0,
+        hp_ev: int = 0,
+        attack_ev: int = 0,
+        defense_ev: int = 0,
+        speed_ev: int = 0,
+        special_ev: int = 0,
+        iv: int = 0,
+        move1_pp: int = 0,
+        move2_pp: int = 0,
+        move3_pp: int = 0,
+        move4_pp: int = 0,
+        friendship: int = 0,
+        pokerus: int = 0,
+        caught: int = 0,
+        level: int = 0,
+        status_condition: int = 0,
+        current_hp: int = 0,
+        max_hp: int = 0,
+        attack: int = 0,
+        defense: int = 0,
+        speed: int = 0,
+        special_attack: int = 0,
+        special_defense: int = 0,
+    ):
+        # These are intentionally scalar values, not one-element tuples.
+        self.generation = generation
+        self.name = name
+        self.species = species
+        self.held_item = held_item
+        self.move1 = move1
+        self.move2 = move2
+        self.move3 = move3
+        self.move4 = move4
+        self.original_trainer = original_trainer
+        self.original_trainer_name = original_trainer_name
+        self.exp = exp
+        self.hp_ev = hp_ev
+        self.attack_ev = attack_ev
+        self.defense_ev = defense_ev
+        self.speed_ev = speed_ev
+        self.special_ev = special_ev
+        self.iv = iv
+        self.move1_pp = move1_pp
+        self.move2_pp = move2_pp
+        self.move3_pp = move3_pp
+        self.move4_pp = move4_pp
+        self.friendship = friendship
+        self.pokerus = pokerus
+        self.caught = caught
+        self.level = level
+        self.status_condition = status_condition
+        self.current_hp = current_hp
+        self.max_hp = max_hp
+        self.attack = attack
+        self.defense = defense
+        self.speed = speed
+        self.special_attack = special_attack
         self.special_defense = special_defense
 
+    def init_gen2(self, data: bytes, party_pokemon: bool = False) -> None:
+        expected_length = 48 if party_pokemon else 32
+        if len(data) != expected_length:
+            raise ValueError(
+                f"Expected a {expected_length}-byte Generation II Pokémon record, got {len(data)} bytes"
+            )
 
-
-    def init_gen2(self, data, party_pokemon:bool = False):
-        ## Gen 2 Pokemon in the party list consist of 48 bytes each
         self.generation = 2
         self.species = get_int(data[0:1])
         self.held_item = get_int(data[1:2])
@@ -98,6 +105,7 @@ class Pokemon:
         self.pokerus = get_int(data[28:29])
         self.caught = get_int(data[29:31])
         self.level = get_int(data[31:32])
+
         if party_pokemon:
             self.status_condition = get_int(data[32:33])
             self.current_hp = get_int(data[34:36])
@@ -117,8 +125,7 @@ class Pokemon:
             self.special_attack = 0
             self.special_defense = 0
 
-
-    def export_gen2(self, party_pokemon:bool = False):
+    def export_gen2(self, party_pokemon: bool = False) -> bytes:
         raw = bytearray()
         raw.append(self.species)
         raw.append(self.held_item)
@@ -142,9 +149,10 @@ class Pokemon:
         raw.append(self.pokerus)
         raw.extend(get_bytes(self.caught, 2))
         raw.append(self.level)
+
         if party_pokemon:
             raw.append(self.status_condition)
-            raw.append(0) # Unused byte
+            raw.append(0)  # Unused byte in the party record.
             raw.extend(get_bytes(self.current_hp, 2))
             raw.extend(get_bytes(self.max_hp, 2))
             raw.extend(get_bytes(self.attack, 2))
@@ -152,4 +160,8 @@ class Pokemon:
             raw.extend(get_bytes(self.speed, 2))
             raw.extend(get_bytes(self.special_attack, 2))
             raw.extend(get_bytes(self.special_defense, 2))
-        return raw
+
+        expected_length = 48 if party_pokemon else 32
+        if len(raw) != expected_length:
+            raise ValueError(f"Exported Pokémon record is {len(raw)} bytes, expected {expected_length}")
+        return bytes(raw)

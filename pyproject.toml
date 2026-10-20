@@ -1,10 +1,10 @@
 [project]
-name = "cruise-control"
-version = "0.1.1"
+name = "chemspc"
+version = "0.2.0"
 authors = [
   { name="Chem", email="codechem@proton.me" },
 ]
-description = "A war driving system for handling raw data."
+description = "An open Poke PC for accessing your Pokemon across various retro Pokemon games."
 readme = "README.md"
 requires-python = ">=3.12.3"
 classifiers = [
@@ -15,7 +15,7 @@ license = "GPL-3.0-or-later"
 license-files = ["LICEN[CS]E*"]
 
 [project.urls]
-Homepage = "https://github.com/chemlibrary/cruise-control"
+Homepage = "https://github.com/chemlibrary/chemspc"
 
 [tool.fastapi]
 entrypoint = "main:app"
