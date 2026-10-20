@@ -129,16 +129,16 @@ class Gen2_Save:
         for pokemon in self.party_pokemon:
             species.append(pokemon.species)
             current_name = encode_gen2_text(text=pokemon.name, add_terminator=False)
-            #print(len(current_name))
+            
             names.extend(current_name)
             if len(pokemon.name) < 10:
                 for i in range((10 - len(pokemon.name))):
-                    #print('.')
+                    
                     names.append(80)
-            #print(f'{len(current_name)} {len(names)} {pokemon.name}')
+            
             ots.extend(encode_gen2_text(text=pokemon.original_trainer_name))
             current_data = pokemon.export_gen2(party_pokemon=True)
-            #print(len(current_data))
+            
             pokemon_list.extend(current_data)
             names.append(255) # Each name is followed by a terminator
             #ots.append(255) # Each Original Trainer is followed by a terminator
@@ -150,8 +150,6 @@ class Gen2_Save:
         
 
         if len(self.party_pokemon) < 6: # Blank the remaining space for species, pokemon list, names, and original trainers if the party is not full
-            blanks = 6 - len(self.party_pokemon)
-            #print(blanks)
             species.extend(bytearray(6 - len(self.party_pokemon)))
             names.extend(bytearray(11 * (6 - len(self.party_pokemon))))
             ots.extend(bytearray((6 - len(self.party_pokemon)) * 11))
@@ -159,10 +157,6 @@ class Gen2_Save:
 
         ots.extend(bytearray(66 - len(ots)))
 
-        #print(len(species))
-        #print(len(names))
-        #print(len(ots))
-        #print(len(pokemon_list))
 
         
 
