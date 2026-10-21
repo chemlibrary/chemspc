@@ -22,6 +22,8 @@ class Pokemon:
         defense_ev: int = 0,
         speed_ev: int = 0,
         special_ev: int = 0,
+        special_attack_ev: int = 0,
+        special_defense_ev: int = 0,
         iv: int = 0,
         move1_pp: int = 0,
         move2_pp: int = 0,
@@ -39,6 +41,15 @@ class Pokemon:
         speed: int = 0,
         special_attack: int = 0,
         special_defense: int = 0,
+        game_of_origin: int | None = None,
+        met_location: int | None = None,
+        egg_location: int | None = None,
+        met_level: int | None = None,
+        pokeball: int | None = None,
+        encounter_type: int | None = None,
+        egg_date: int | None = None,
+        met_date: int | None = None,
+        original_trainer_gender: int | None = None,
     ):
         # These are intentionally scalar values, not one-element tuples.
         self.generation = generation
@@ -57,6 +68,8 @@ class Pokemon:
         self.defense_ev = defense_ev
         self.speed_ev = speed_ev
         self.special_ev = special_ev
+        self.special_attack_ev = special_attack_ev
+        self.special_defense_ev = special_defense_ev
         self.iv = iv
         self.move1_pp = move1_pp
         self.move2_pp = move2_pp
@@ -74,6 +87,17 @@ class Pokemon:
         self.speed = speed
         self.special_attack = special_attack
         self.special_defense = special_defense
+        # Optional modern-generation metadata; None means the generation does not
+        # expose that field through its current parser.
+        self.game_of_origin = game_of_origin
+        self.met_location = met_location
+        self.egg_location = egg_location
+        self.met_level = met_level
+        self.pokeball = pokeball
+        self.encounter_type = encounter_type
+        self.egg_date = egg_date
+        self.met_date = met_date
+        self.original_trainer_gender = original_trainer_gender
 
     def init_gen2(self, data: bytes, party_pokemon: bool = False) -> None:
         expected_length = 48 if party_pokemon else 32

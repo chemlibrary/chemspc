@@ -1,60 +1,38 @@
-# chemspc source updates: English Generation II and Crystal support
+# chemspc Generation II–IV integration notes
 
-This bundle supports reading and writing English Pokémon Gold, Silver, and
-Crystal save files. It keeps the input save unchanged and writes the modified
-save to `<input-path>.new`.
+## Project support
 
-## Crystal implementation
+- Generation II: Gold/Silver and Crystal save handlers, including game-specific party/box structures and checksums.
+- Generation III: Ruby, Sapphire, Emerald, FireRed, and LeafGreen save handling through `Gen3_Save`.
+- Generation IV: Diamond, Pearl, Platinum, HeartGold, and SoulSilver save handling through `Gen4_Save`.
+- `main.py` dispatches the selected game to the corresponding handler and runs the common extraction-to-SQLite process.
 
-- Added `Crystal_Save` (also exported as `Gen2_Crystal_Save`) to `gen2.py`.
-- Uses Crystal's party offset (`0x2865`), current-box number offset (`0x2700`),
-  and live Current Box offset (`0x2D10`).
-- Reuses the English Generation II party and PC box serializer; English Crystal
-  uses the same 428-byte party, 14 boxes, and box offsets as Gold/Silver.
-- Copies Crystal's primary data bytes `0x2009..0x2B82` to its secondary copy at
-  `0x1209..0x1D82`, recalculates both little-endian checksums, and updates the
-  Crystal save-magic bytes for both copies.
-- Keeps the live Current Box synchronized with the selected numbered PC box.
-- Adds `--game crystal` to the CLI; Gold/Silver remains the default.
+## Extraction workflow
 
-## Usage
+1. Parse Pokémon from the party and PC storage.
+2. Insert the extracted Pokémon batch into SQLite in one transaction.
+3. Clear the party and PC records in the in-memory save only after that insertion commits.
+4. Write `<input-file>.new`; never overwrite the original save.
 
-Gold/Silver (default):
+If the database insertion fails, the workflow exits before writing a Pokémon-free save.
 
-```bash
-python main.py path/to/save.sav
-```
+## Database
 
-Crystal:
+Existing `pokemon` and `inactive_pokemon` SQLite tables are migrated automatically with nullable fields for source game, Gen III Special Attack/Special Defense EVs, Gen III/IV identity values, and Gen IV encounter metadata. Existing rows are retained.
 
-```bash
-python main.py path/to/crystal.sav --game crystal
-```
+## Generation IV implementation
 
-The tool inserts extracted Pokémon in one SQLite transaction before writing
-an output save with the party and PC boxes cleared. The original save is never
-overwritten. Review the `.new` file before using it in an emulator or replacing
-any other save copy.
+- Uses separate retail layout profiles for Diamond/Pearl, Platinum, and HeartGold/SoulSilver.
+- Validates and selects linked general/storage block copies using save footer metadata and CRC-16-CCITT checksums.
+- Reads party and all 18 PC boxes; validates/decrypts 136-byte boxed and 236-byte party Pokémon records, including PID-based stat encryption.
+- Preserves existing encrypted Pokémon records and updates relevant block checksums when writing a modified copy.
 
-## Tests
+## Validation
 
-Run from the project root:
+Run all included tests with:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-The tests check the structural layout and checksums with synthetic 32 KiB
-fixtures. A known-good real Crystal save and emulator validation are still
-recommended before relying on the output for a valuable save file.
-
-## Scope and limitations
-
-- English Gold, Silver, and Crystal saves are supported. Japanese layouts are
-  not supported.
-- Text encoding supports the character subset already implemented by this
-  project; unsupported characters raise an error rather than silently changing
-  names.
-- Pokémon are stored with the fields modeled in `pokemon.py`; no unrelated
-  Crystal game state is intentionally modified beyond the party/box data,
-  backup copy, and checksum/magic fields needed for a valid save.
+The current suite passes 31 tests using synthetic fixtures. These tests cover Generation II–IV structural logic and Gen III/IV SQLite integration. They do **not** replace validation against known-good retail save files in an emulator. Keep backups and verify generated `.new` files before using them as primary saves.
