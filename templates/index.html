@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}ChemSPC · Pokémon Storage{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="eyebrow">YOUR RETRO PC BOX</div>
+  <h1>Move Pokémon safely.<br><span>On your terms.</span></h1>
+  <p>Choose exactly which Pokémon to move between an English Gold/Silver save and your ChemSPC database. Review every selection before any changes are committed.</p>
+  <div class="hero-stats">
+    <div><strong>{{ active|length }}</strong><span>Active in database</span></div>
+    <div><strong>{{ inactive_count }}</strong><span>In inactive history</span></div>
+  </div>
+</section>
+
+<section class="panel upload-panel">
+  <div class="panel-heading"><div><div class="eyebrow">STEP 01</div><h2>Open a save file</h2></div><span class="step-number">01</span></div>
+  <p class="muted">Upload a raw 32 KiB English Pokémon Gold or Silver save. The original upload is kept unchanged; finalizing produces a new save file to download.</p>
+  <form action="{{ url_for('open_save') }}" method="post" enctype="multipart/form-data" class="upload-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="file-picker"><span class="upload-icon">↑</span><span><strong>Choose your save file</strong><small>.sav · exactly 32,768 bytes</small></span><input type="file" name="save_file" accept=".sav,.srm,application/octet-stream" required></label>
+    <button class="button button-primary" type="submit">Load Pokémon <span>→</span></button>
+  </form>
+  <div class="safety-note"><span>✓</span><span><strong>Nothing changes yet.</strong> Pokémon selections are staged until you press “Finalize transfer”.</span></div>
+</section>
+
+<section class="panel db-panel">
+  <div class="panel-heading"><div><div class="eyebrow">YOUR COLLECTION</div><h2>Active database Pokémon</h2></div><span class="count-pill">{{ active|length }} Pokémon</span></div>
+  {% if active %}
+  <div class="table-wrap"><table><thead><tr><th>Pokémon</th><th>Species ID</th><th>Gen</th><th>Held item</th><th>Moves</th></tr></thead><tbody>
+  {% for p in active %}<tr><td><strong>{{ p.name or 'Unnamed' }}</strong><small class="subline">UID {{ p.uid }} · Lv. {{ p.level }}</small></td><td>#{{ p.species }}</td><td><span class="tag">{{ p.generation }}</span></td><td>{{ p.held_item }}</td><td class="move-cell">{{ [p.move1, p.move2, p.move3, p.move4]|select('ne', 0)|join(', ') or '—' }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state"><div class="empty-icon">◌</div><strong>Your storage is empty</strong><p>Open a save file and import some Pokémon to begin.</p></div>{% endif %}
+</section>
+<div class="scope-note"><strong>Current support:</strong> English Pokémon Gold/Silver save layout and Generation II Pokémon/item/move ID ranges. Crystal, non-English saves, and move-learnset legality checks are not yet supported.</div>
+{% endblock %}

@@ -1,21 +1,10 @@
 [project]
 name = "chemspc"
-version = "0.5.1"
-authors = [
-  { name="Chem", email="codechem@proton.me" },
-]
-description = "An open Poke PC for accessing your Pokemon across various retro Pokemon games."
-readme = "README.md"
-requires-python = ">=3.12.3"
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
-]
-license = "GPL-3.0-or-later"
-license-files = ["LICEN[CS]E*"]
+version = "0.2.0"
+description = "A local web interface for managing Pokémon in English Generation II Gold/Silver save files."
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+dependencies = ["Flask>=3.0,<4.0"]
 
-[project.urls]
-Homepage = "https://github.com/chemlibrary/chemspc"
-
-[tool.fastapi]
-entrypoint = "main:app"
+[tool.pytest.ini_options]
+testpaths = ["tests"]

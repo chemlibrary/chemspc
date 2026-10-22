@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}ChemSPC · Transfer Complete{% endblock %}
+{% block content %}
+<section class="result-panel panel">
+  <div class="result-mark">✓</div>
+  <div class="eyebrow">TRANSFER FINALIZED</div>
+  <h1>All set.</h1>
+  <p class="muted">Your selected database changes were committed and a modified save file is ready. The original uploaded save remains unchanged.</p>
+  <div class="result-stats">
+    <div><strong>{{ imported }}</strong><span>Imported to active database</span></div>
+    <div><strong>{{ exported }}</strong><span>Moved to inactive database</span></div>
+  </div>
+  <a class="button button-primary download-button" href="{{ url_for('download', token=token) }}">Download modified save <span>↓</span></a>
+  <div class="safety-note"><span>!</span><span>Keep the downloaded file as a backup and verify it in your emulator before replacing any original save.</span></div>
+  <a class="back-link centered-link" href="{{ url_for('index') }}">← Return to your storage</a>
+</section>
+{% endblock %}

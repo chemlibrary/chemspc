@@ -1,1 +1,1 @@
-chemlibrary_chempy>=2.4.9
+Flask>=3.0,<4.0

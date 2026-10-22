@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}ChemSPC · Review Transfer{% endblock %}
+{% block content %}
+<div class="page-intro">
+  <a class="back-link" href="{{ url_for('index') }}">← Back to storage</a>
+  <div class="eyebrow">STEP 02 · REVIEW SELECTIONS</div>
+  <h1>Review your <span>transfer.</span></h1>
+  <p class="muted">Save loaded: <strong>{{ display_name }}</strong>. Choose from both sides below, then finalize once you're satisfied.</p>
+</div>
+<form action="{{ url_for('finalize') }}" method="post" id="transfer-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <section class="panel">
+    <div class="panel-heading"><div><div class="eyebrow">IMPORT FROM SAVE</div><h2>Pokémon in this save</h2></div><span class="count-pill">{{ source_entries|length }} found</span></div>
+    <p class="muted compact">Select any Pokémon to move into the active database. Selected Pokémon will be removed from this save copy.</p>
+    {% if source_entries %}
+    <div class="pokemon-grid">
+      {% for entry in source_entries %}{% set p = entry.pokemon %}
+      <label class="pokemon-card">
+        <input type="checkbox" name="import_slot" value="{{ entry.locator }}">
+        <span class="card-check"></span>
+        <span class="card-position">{{ entry.position }}</span>
+        <span class="card-title">{{ p.name or 'Unnamed' }}</span>
+        <span class="card-meta">Species #{{ p.species }} <i>·</i> Lv. {{ p.level }}</span>
+        <span class="card-details">Item {{ p.held_item }} <i>·</i> Moves {{ [p.move1, p.move2, p.move3, p.move4]|select('ne', 0)|join(', ') or '—' }}</span>
+        <span class="card-action">Select to import</span>
+      </label>
+      {% endfor %}
+    </div>
+    {% else %}<div class="empty-state small-empty"><strong>No Pokémon found in this save</strong><p>You can still export compatible Pokémon from the database.</p></div>{% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading"><div><div class="eyebrow">EXPORT TO SAVE</div><h2>Pokémon in your database</h2></div><span class="count-pill">{{ export_candidates|length }} active</span></div>
+    <p class="muted compact">Select compatible Pokémon to place into the target save. Pokémon with valid stored party stats use a free party slot; box-origin records use a storage box. Exported rows move to the inactive Pokémon table when finalized.</p>
+    {% if export_candidates %}
+    <div class="table-wrap"><table class="select-table"><thead><tr><th class="check-col"></th><th>Pokémon</th><th>Species</th><th>Item</th><th>Moves</th><th>Compatibility</th></tr></thead><tbody>
+      {% for item in export_candidates %}{% set p = item.pokemon %}
+      <tr class="{% if item.issues %}row-disabled{% endif %}">
+        <td class="check-col"><input type="checkbox" name="export_uid" value="{{ item.row.uid }}" aria-label="Export {{ p.name or 'Pokémon' }}" {% if item.issues %}disabled{% endif %}></td>
+        <td><strong>{{ p.name or 'Unnamed' }}</strong><small class="subline">UID {{ item.row.uid }} · Gen {{ p.generation }} · Lv. {{ p.level }}</small></td>
+        <td>#{{ p.species }}</td><td>{{ p.held_item }}</td><td class="move-cell">{{ [p.move1, p.move2, p.move3, p.move4]|select('ne', 0)|join(', ') or '—' }}</td>
+        <td>{% if item.issues %}<span class="status status-bad">Not compatible</span><span class="issue-detail">{{ item.issues|join(' ') }}</span>{% else %}<span class="status status-good">Compatible</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table></div>
+    {% else %}<div class="empty-state small-empty"><strong>No active database Pokémon</strong><p>Import Pokémon from the save above to get started.</p></div>{% endif %}
+  </section>
+
+  <section class="finalize-bar">
+    <div><span class="finalize-title">Ready to make it official?</span><span class="finalize-copy">Only your selected Pokémon will move. A new save file will be generated.</span></div>
+    <div class="finalize-actions"><button class="button button-quiet" type="submit" formaction="{{ url_for('cancel') }}" formmethod="post" formnovalidate>Cancel</button><button class="button button-primary" type="submit" id="finalize-button">Finalize transfer <span>→</span></button></div>
+  </section>
+</form>
+<div class="scope-note"><strong>Compatibility check:</strong> exports must be Gen II Pokémon with valid Gold/Silver species, held-item and move ID ranges, supported field widths, and English Gen II names. This checks data compatibility, not whether each move is legal for that species' learnset.</div>
+{% endblock %}

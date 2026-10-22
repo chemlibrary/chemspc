@@ -7,3 +7,5 @@
 **/.venv
 *.lock
 *.db
+# Local uploaded saves and generated transfer files must not be committed.
+instance/
