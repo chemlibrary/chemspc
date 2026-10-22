@@ -2,7 +2,6 @@
 **/db.sqlite3
 **/__pycache__
 **/migrations
-**/chemlibrary_chemapi.egg-info
 **/.pytest_cache
 **/build
 **/.venv

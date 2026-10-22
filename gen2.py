@@ -60,6 +60,51 @@ def _write_checksum(save: bytearray, offset: int, value: int) -> None:
     save[offset:offset + 2] = (value & 0xFFFF).to_bytes(2, "little")
 
 
+def is_valid_gold_silver_save(data: bytes | bytearray) -> bool:
+    """Return whether both English Gold/Silver save checksums are valid.
+
+    The normal reader remains permissive for compatibility with incomplete
+    save dumps. This stricter predicate is used by automatic game detection so
+    an arbitrary 32 KiB file is not assumed to be Generation II.
+    """
+    if len(data) != SAVE_SIZE or not any(data[0x2009:0x2D69]):
+        return False
+    # A valid retail save mirrors each primary region into its backup slot.
+    if not all(
+        data[backup:backup + end - start + 1] == data[start:end + 1]
+        for start, end, backup in _GS_BACKUP_REGIONS
+    ):
+        return False
+    primary = sum(data[0x2009:0x2D69]) & 0xFFFF
+    secondary = (
+        sum(data[0x0C6B:0x17ED])
+        + sum(data[0x3D96:0x3F40])
+        + sum(data[0x7E39:0x7E6D])
+    ) & 0xFFFF
+    return (
+        int.from_bytes(data[0x2D69:0x2D6B], "little") == primary
+        and int.from_bytes(data[0x7E6D:0x7E6F], "little") == secondary
+    )
+
+
+def is_valid_crystal_save(data: bytes | bytearray) -> bool:
+    """Return whether both English Crystal save checksums and markers match."""
+    if len(data) != SAVE_SIZE or not any(data[0x2009:0x2B83]):
+        return False
+    if data[0x1209:0x1D83] != data[0x2009:0x2B83]:
+        return False
+    primary = sum(data[0x2009:0x2B83]) & 0xFFFF
+    secondary = sum(data[0x1209:0x1D83]) & 0xFFFF
+    return (
+        data[0x2008] == 0x63
+        and data[0x2D0F] == 0x7F
+        and data[0x1208] == 0x63
+        and data[0x1F0F] == 0x7F
+        and int.from_bytes(data[0x2D0D:0x2D0F], "little") == primary
+        and int.from_bytes(data[0x1F0D:0x1F0F], "little") == secondary
+    )
+
+
 def _fixed_name_field(name: str) -> bytes:
     """Encode an English Gen II Pokémon/OT name into its 11-byte field.
 

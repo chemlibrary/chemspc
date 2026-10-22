@@ -11,14 +11,14 @@
 | I | Pokémon Red | `red` |
 | I | Pokémon Blue | `blue` |
 | I | Pokémon Yellow | `yellow` |
-| II | Pokémon Gold / Silver | `gold-silver` (default) |
+| II | Pokémon Gold / Silver | `gold-silver` |
 | II | Pokémon Crystal | `crystal` |
 | III | Pokémon Ruby | `ruby` |
 | III | Pokémon Sapphire | `sapphire` |
 | III | Pokémon Emerald | `emerald` |
 | III | Pokémon FireRed | `firered` |
 | III | Pokémon LeafGreen | `leafgreen` |
-| III | Detect a compatible Gen III layout | `auto` |
+| I–VII | Detect the save generation and compatible layout | `auto` (default) |
 | IV | Pokémon Diamond | `diamond` |
 | IV | Pokémon Pearl | `pearl` |
 | IV | Pokémon Platinum | `platinum` |
@@ -37,7 +37,7 @@
 | VII | Pokémon Ultra Sun | `ultrasun` |
 | VII | Pokémon Ultra Moon | `ultramoon` |
 
-The program expects save data, not ROMs. Generation I accepts English Red/Blue/Yellow SRAM dumps; Generations II–V support the documented layouts noted below. Generations VI and VII require decrypted, PKHeX-compatible 3DS `main` save dumps: X/Y are `0x65600` bytes, Omega Ruby/Alpha Sapphire are `0x76000` bytes, Sun/Moon are `0x6BE00` bytes, and Ultra Sun/Ultra Moon are `0x6CC00` bytes. These handlers do not accept the encrypted outer 3DS save container; use a compatible save manager to export/import the decrypted `main` data. Specify the exact game for Generations IV–VII. Gen III `auto` mode may identify a compatible layout without determining the exact title; ambiguous layouts raise an error instead of guessing. Gen V distinguishes the Black/White layout from the Black 2/White 2 layout.
+The program expects save data, not ROMs. `--game auto` (the default) validates the save format across Generations I–VII and selects the compatible reader/writer. Generation I accepts English Red/Blue/Yellow SRAM dumps; Generations II–V support the documented layouts noted below. Generations VI and VII require decrypted, PKHeX-compatible 3DS `main` save dumps: X/Y are `0x65600` bytes, Omega Ruby/Alpha Sapphire are `0x76000` bytes, Sun/Moon are `0x6BE00` bytes, and Ultra Sun/Ultra Moon are `0x6CC00` bytes. These handlers do not accept the encrypted outer 3DS save container; use a compatible save manager to export/import the decrypted `main` data. Some games share the same physical save layout (such as Red/Blue/Yellow or Diamond/Pearl), so auto mode may identify only the generation rather than claim an exact title. When the layout itself is ambiguous or fails validation, auto mode asks you to specify `--game` instead of guessing. Generation II detection uses its stored save checksums, while the Generation IV/V and Generation VI/VII readers validate their respective save structures.
 
 ## Installation
 
@@ -70,7 +70,7 @@ The Gen I parser converts standard internal species indexes to National Pokédex
 
 ### Generation II: Gold / Silver
 
-Gold/Silver is the default, so the game flag can be omitted:
+Auto mode identifies checksum-valid Gold/Silver and Crystal saves without a game flag. Specify the shared Gold/Silver layout explicitly when desired:
 
 ```bash
 python main.py pokemon-gold.sav
@@ -93,11 +93,15 @@ python main.py pokemon-firered.sav --game firered
 python main.py pokemon-leafgreen.sav --game leafgreen
 ```
 
-Gen III layout detection can be requested when the game version is unknown:
+Automatic detection is the default and can be used for any supported generation:
 
 ```bash
+python main.py pokemon.sav
+# Equivalent:
 python main.py pokemon.sav --game auto
 ```
+
+Auto mode identifies a compatible save layout from the file structure and checksums. It cannot determine exact titles when different games use the same layout; those imports are tagged with the generation-level source label rather than a guessed game title. You can always specify `--game` explicitly to set the title when you know it.
 
 ### Generation IV: Diamond, Pearl, Platinum, HeartGold, SoulSilver
 
@@ -109,7 +113,7 @@ python main.py pokemon-heartgold.sav --game heartgold
 python main.py pokemon-soulsilver.sav --game soulsilver
 ```
 
-Gen IV requires an explicit game because Diamond/Pearl, Platinum, and HeartGold/SoulSilver use different block layouts. The Gen IV handler expects an unheadered 512 KiB (`524288` byte) raw save file, and it validates the linked save blocks and their CRC-16-CCITT checksums before reading or writing them.
+The Gen IV handler expects an unheadered 512 KiB (`524288` byte) raw save file, and validates the linked save blocks and their CRC-16-CCITT checksums before reading or writing them. Auto mode identifies the compatible layout family; Diamond/Pearl and HeartGold/SoulSilver each share a layout internally, so it does not infer the exact paired title.
 
 ### Generation V: Black, White, Black 2, White 2
 
