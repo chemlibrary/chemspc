@@ -23,11 +23,14 @@ from save_formats import (
     open_save,
     put_in_box,
     supported_games,
+    trim_save_file,
 )
 
 app = Flask(__name__, instance_relative_config=True)
 app.secret_key = os.environ.get("CHEMSPC_SECRET_KEY") or secrets.token_hex(32)
-app.config["MAX_CONTENT_LENGTH"] = 768 * 1024
+# Permit moderate emulator-added trailers; staged files are normalized to the
+# selected game's known raw-save size before any parser sees them.
+app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
 app.config["UPLOAD_FOLDER"] = str(Path(app.instance_path) / "staging")
 app.config["EXPORT_FOLDER"] = str(Path(app.instance_path) / "exports")
 
@@ -256,7 +259,10 @@ def open_save_route():
     path = folder / "source.sav"
     try:
         upload.save(path)
-        # Parsing validates the selected generation/layout before the workflow is activated.
+        # Trim emulator-added trailers against the selected title's native format
+        # before parsing. The uploaded user's original file is never modified.
+        original_size, retained_size = trim_save_file(path, game)
+        # Parsing validates the selected generation/layout before activation.
         save = open_save(path, game)
         del save
     except (OSError, ValueError, ImportError) as exc:
@@ -269,6 +275,12 @@ def open_save_route():
     session["save_game"] = game
     default_extension = ".main" if get_game_spec(game).generation in (6, 7) else ".sav"
     session["save_extension"] = Path(safe_name).suffix.lower() or default_extension
+    if original_size > retained_size:
+        flash(
+            f"Removed {original_size - retained_size:,} trailing bytes from the upload; "
+            f"kept the required {retained_size:,}-byte save for this game.",
+            "info",
+        )
     flash("Save loaded. Choose Pokémon to import and export; nothing changes until you finalize.", "success")
     return redirect(url_for("manage"))
 

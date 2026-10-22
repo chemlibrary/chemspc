@@ -61,6 +61,48 @@ GAME_SPECS: dict[str, GameSpec] = {
     "ultramoon": GameSpec(7, "Pokémon Ultra Moon", "gen7", "Gen7_Save", box_count=32, box_capacity=30, description="Decrypted PKHeX-compatible 3DS main save"),
 }
 
+# Exact input lengths expected by the project's native readers/writers. Emulator
+# formats sometimes append RTC or other footer bytes; those are not part of the
+# raw save layout accepted by these handlers. Sizes for Gen VI/VII differ by title.
+SAVE_SIZES: dict[str, int] = {
+    # Generation I: some emulator tools emit a 128 KiB dump; only the first
+    # 32 KiB are the English cartridge SRAM layout used by this parser.
+    "red": 0x8000,
+    "blue": 0x8000,
+    "yellow": 0x8000,
+    # Generation II
+    "gold-silver": 0x8000,
+    "crystal": 0x8000,
+    # Generation III: raw 128 KiB flash saves
+    "ruby": 0x20000,
+    "sapphire": 0x20000,
+    "emerald": 0x20000,
+    "firered": 0x20000,
+    "leafgreen": 0x20000,
+    # Generation IV: raw unheadered 512 KiB saves
+    "diamond": 0x80000,
+    "pearl": 0x80000,
+    "platinum": 0x80000,
+    "heartgold": 0x80000,
+    "soulsilver": 0x80000,
+    # Generation V: raw unheadered 512 KiB saves (the native handler validates
+    # the smaller mirrored save copies inside this outer raw save).
+    "black": 0x80000,
+    "white": 0x80000,
+    "black2": 0x80000,
+    "white2": 0x80000,
+    # Generation VI: decrypted 3DS main save
+    "x": 0x65600,
+    "y": 0x65600,
+    "omegaruby": 0x76000,
+    "alphasapphire": 0x76000,
+    # Generation VII: decrypted 3DS main save
+    "sun": 0x6BE00,
+    "moon": 0x6BE00,
+    "ultrasun": 0x6CC00,
+    "ultramoon": 0x6CC00,
+}
+
 
 def supported_games() -> list[tuple[str, str, int, str]]:
     """Return (game key, label, generation, format description) for templates."""
@@ -72,6 +114,48 @@ def get_game_spec(game: str) -> GameSpec:
     if key not in GAME_SPECS:
         raise ValueError("Choose one of the supported English Generation I–VII games.")
     return GAME_SPECS[key]
+
+
+def required_save_size(game: str) -> int:
+    """Return the exact raw save size expected for the selected title."""
+    key = (game or "").strip().lower().replace("_", "-")
+    get_game_spec(key)  # Validate the title before consulting the size registry.
+    try:
+        return SAVE_SIZES[key]
+    except KeyError as exc:  # Defensive guard if a future title lacks a size.
+        raise ValueError(f"No required save size is configured for {key!r}.") from exc
+
+
+def trim_save_file(path: str | Path, game: str) -> tuple[int, int]:
+    """Trim trailing upload bytes to the selected game's raw save size.
+
+    Returns (original_size, retained_size). Short files are rejected rather than
+    padded, because padding can turn incomplete/corrupt saves into misleading input.
+    Only the staged upload path is modified; the user's original local file is
+    never touched by this function.
+    """
+    save_path = Path(path)
+    required = required_save_size(game)
+    try:
+        original_size = save_path.stat().st_size
+    except OSError as exc:
+        raise ValueError(f"Unable to read uploaded save file: {exc}") from exc
+
+    if original_size < required:
+        raise ValueError(
+            f"The uploaded save is too small for the selected game "
+            f"({original_size:,} bytes; {required:,} bytes required). "
+            "The file appears incomplete, so it was not modified."
+        )
+
+    if original_size > required:
+        try:
+            with save_path.open("r+b") as stream:
+                stream.truncate(required)
+        except OSError as exc:
+            raise ValueError(f"Unable to trim uploaded save file: {exc}") from exc
+
+    return original_size, required
 
 
 def open_save(path: str | Path, game: str):

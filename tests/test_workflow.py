@@ -57,10 +57,10 @@ class ChemSPCWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(match)
         return match.group(1).decode()
 
-    def upload_save(self, path: Path):
+    def upload_save(self, path: Path, trailer: bytes = b""):
         return self.client.post(
             "/open-save",
-            data={"csrf_token": self.csrf(), "game": "gold-silver", "save_file": (io.BytesIO(path.read_bytes()), "test.sav")},
+            data={"csrf_token": self.csrf(), "game": "gold-silver", "save_file": (io.BytesIO(path.read_bytes() + trailer), "test.sav")},
             content_type="multipart/form-data",
             follow_redirects=True,
         )
@@ -95,6 +95,32 @@ class ChemSPCWorkflowTests(unittest.TestCase):
         self.assertEqual(parsed.party_pokemon[0].name, "Pika")
         self.assertEqual(parsed.save_bytes[0x2008], 0x63)
         self.assertEqual(parsed.save_bytes[0x1208], 0x63)
+
+    def test_upload_trims_emulator_added_bytes_before_parsing(self):
+        path = self.make_save(Path(self.temp.name) / "with-tail.sav")
+        response = self.upload_save(path, trailer=b"EMU-RTC-FOOTER" * 20)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Removed", response.data)
+        with self.client.session_transaction() as session:
+            staged_path = Path(main.app.config["UPLOAD_FOLDER"]) / session["workflow_id"] / "source.sav"
+        self.assertEqual(staged_path.stat().st_size, 32768)
+        self.assertEqual(staged_path.read_bytes(), path.read_bytes())
+
+    def test_short_upload_is_rejected_without_activating_workflow(self):
+        response = self.client.post(
+            "/open-save",
+            data={
+                "csrf_token": self.csrf(),
+                "game": "gold-silver",
+                "save_file": (io.BytesIO(bytes(32767)), "short.sav"),
+            },
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"too small", response.data)
+        with self.client.session_transaction() as session:
+            self.assertNotIn("workflow_id", session)
 
     def test_save_round_trip_rebuilds_party_and_boxes(self):
         path = self.make_save(Path(self.temp.name) / "initial.sav", [self.valid_pokemon()])
