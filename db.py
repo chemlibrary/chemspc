@@ -9,7 +9,7 @@ DATABASE_NAME = "chemspc.db"
 
 CREATE_POKEMON_TABLE = """CREATE TABLE IF NOT EXISTS pokemon (
     uid INTEGER PRIMARY KEY AUTOINCREMENT,
-    generation INTEGER, source_game TEXT, personality INTEGER, ability INTEGER,
+    generation INTEGER, source_game TEXT, gen1_internal_species INTEGER, personality INTEGER, ability INTEGER,
     language INTEGER, gender INTEGER, nature INTEGER, is_egg INTEGER, is_shiny INTEGER,
     game_of_origin INTEGER, met_location INTEGER, egg_location INTEGER, met_level INTEGER,
     pokeball INTEGER, encounter_type INTEGER, egg_date INTEGER, met_date INTEGER,
@@ -27,7 +27,7 @@ CREATE_POKEMON_TABLE = """CREATE TABLE IF NOT EXISTS pokemon (
 )"""
 
 CREATE_INACTIVE_TABLE = """CREATE TABLE IF NOT EXISTS inactive_pokemon (
-    uid INTEGER, generation INTEGER, source_game TEXT, personality INTEGER, ability INTEGER,
+    uid INTEGER, generation INTEGER, source_game TEXT, gen1_internal_species INTEGER, personality INTEGER, ability INTEGER,
     language INTEGER, gender INTEGER, nature INTEGER, is_egg INTEGER, is_shiny INTEGER,
     game_of_origin INTEGER, met_location INTEGER, egg_location INTEGER, met_level INTEGER,
     pokeball INTEGER, encounter_type INTEGER, egg_date INTEGER, met_date INTEGER,
@@ -45,7 +45,7 @@ CREATE_INACTIVE_TABLE = """CREATE TABLE IF NOT EXISTS inactive_pokemon (
 )"""
 
 INSERT_POKEMON_SQL = """INSERT INTO pokemon (
-    generation, source_game, personality, ability, language, gender, nature, is_egg, is_shiny,
+    generation, source_game, gen1_internal_species, personality, ability, language, gender, nature, is_egg, is_shiny,
     game_of_origin, met_location, egg_location, met_level, pokeball, encounter_type, egg_date, met_date, original_trainer_gender,
     name, species, held_item, move1, move2, move3, move4,
     original_trainer, original_trainer_name, exp, hp_ev, attack_ev,
@@ -53,12 +53,13 @@ INSERT_POKEMON_SQL = """INSERT INTO pokemon (
     iv, move1_pp, move2_pp, move3_pp, move4_pp, friendship, pokerus, caught,
     level, status_condition, current_hp, max_hp, attack, defense, speed,
     special_attack, special_defense
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
 
 
 def _pokemon_values(pokemon: Pokemon) -> tuple:
     return (
         pokemon.generation, getattr(pokemon, "game_name", None),
+        getattr(pokemon, "gen1_internal_species", None),
         getattr(pokemon, "personality", None), getattr(pokemon, "ability", None),
         getattr(pokemon, "language", None), getattr(pokemon, "gender", None),
         getattr(pokemon, "nature", None), getattr(pokemon, "is_egg", None),
@@ -94,6 +95,7 @@ def _run_transaction(callback) -> None:
 _MIGRATED_COLUMNS = {
     "pokemon": {
         "source_game": "TEXT",
+        "gen1_internal_species": "INTEGER",
         "personality": "INTEGER",
         "ability": "INTEGER",
         "language": "INTEGER",
@@ -115,6 +117,7 @@ _MIGRATED_COLUMNS = {
     },
     "inactive_pokemon": {
         "source_game": "TEXT",
+        "gen1_internal_species": "INTEGER",
         "personality": "INTEGER",
         "ability": "INTEGER",
         "language": "INTEGER",
@@ -138,7 +141,7 @@ _MIGRATED_COLUMNS = {
 
 
 def _ensure_schema_columns(conn: sqlite3.Connection) -> None:
-    """Add Generation III/IV-specific columns to older databases."""
+    """Add nullable metadata columns required by the supported generations."""
     for table_name, columns in _MIGRATED_COLUMNS.items():
         existing = {
             row[1] for row in conn.execute(f"PRAGMA table_info({table_name})")

@@ -1,6 +1,6 @@
 [project]
 name = "chemspc"
-version = "0.2.3"
+version = "0.5.0"
 authors = [
   { name="Chem", email="codechem@proton.me" },
 ]

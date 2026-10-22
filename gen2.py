@@ -11,7 +11,21 @@ from __future__ import annotations
 import os
 from typing import Sequence
 
-from chempy.files import bytes_safe_write
+try:
+    from chempy.files import bytes_safe_write
+except ModuleNotFoundError:
+    from pathlib import Path
+    import os
+
+    def bytes_safe_write(*, path, contents):
+        destination = Path(path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(destination.name + ".tmp")
+        with open(temporary, "wb") as handle:
+            handle.write(contents)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, destination)
 from pokemon import Pokemon
 
 SAVE_SIZE = 0x8000

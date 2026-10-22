@@ -1,6 +1,15 @@
 """Pokémon data model and Generation II record conversion."""
 
-from chempy.primitives import get_int, get_bytes
+try:
+    from chempy.primitives import get_int, get_bytes
+except ModuleNotFoundError:
+    # Keep the save parsers usable as a standalone source bundle too. The
+    # original helpers use big-endian byte conversion for Generation II data.
+    def get_int(data):
+        return int.from_bytes(data, "big")
+
+    def get_bytes(value, length):
+        return int(value).to_bytes(length, "big")
 
 
 class Pokemon:
@@ -50,6 +59,7 @@ class Pokemon:
         egg_date: int | None = None,
         met_date: int | None = None,
         original_trainer_gender: int | None = None,
+        gen1_internal_species: int | None = None,
     ):
         # These are intentionally scalar values, not one-element tuples.
         self.generation = generation
@@ -98,6 +108,8 @@ class Pokemon:
         self.egg_date = egg_date
         self.met_date = met_date
         self.original_trainer_gender = original_trainer_gender
+        # Generation I stores internal species IDs distinct from National Dex IDs.
+        self.gen1_internal_species = gen1_internal_species
 
     def init_gen2(self, data: bytes, party_pokemon: bool = False) -> None:
         expected_length = 48 if party_pokemon else 32
