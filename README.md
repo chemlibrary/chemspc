@@ -1,218 +1,163 @@
-# chemspc
+# ChemSPC
 
-`chemspc` extracts Pokémon data from supported Generation I–VII save files into a local SQLite database. After the database import succeeds, it writes a separate save-file copy with Pokémon removed from the party and PC boxes.
+ChemSPC is a local web-based Pokémon storage manager for supported English Pokémon save formats from **Generations I–VII**. It provides a shared SQLite collection where you can selectively import Pokémon from a game save and export compatible Pokémon back into a save of the same generation.
 
-> **Protect your saves:** the input `.sav` file is never overwritten. The program writes its modified result to `<input-file>.new`. Keep a separate backup and validate output with a known-good retail save and an emulator before relying on it.
+ChemSPC is intended for personal, local use. It is not a save editor for arbitrary changes, a cross-generation converter, or a complete Pokémon legality checker.
 
-## Supported games
+## Features
 
-| Generation | Games | CLI value |
-|---|---|---|
-| I | Pokémon Red | `red` |
-| I | Pokémon Blue | `blue` |
-| I | Pokémon Yellow | `yellow` |
-| II | Pokémon Gold / Silver | `gold-silver` |
-| II | Pokémon Crystal | `crystal` |
-| III | Pokémon Ruby | `ruby` |
-| III | Pokémon Sapphire | `sapphire` |
-| III | Pokémon Emerald | `emerald` |
-| III | Pokémon FireRed | `firered` |
-| III | Pokémon LeafGreen | `leafgreen` |
-| I–VII | Detect the save generation and compatible layout | `auto` (default) |
-| IV | Pokémon Diamond | `diamond` |
-| IV | Pokémon Pearl | `pearl` |
-| IV | Pokémon Platinum | `platinum` |
-| IV | Pokémon HeartGold | `heartgold` |
-| IV | Pokémon SoulSilver | `soulsilver` |
-| V | Pokémon Black | `black` |
-| V | Pokémon White | `white` |
-| V | Pokémon Black 2 | `black2` |
-| V | Pokémon White 2 | `white2` |
-| VI | Pokémon X | `x` |
-| VI | Pokémon Y | `y` |
-| VI | Pokémon Omega Ruby | `omegaruby` |
-| VI | Pokémon Alpha Sapphire | `alphasapphire` |
-| VII | Pokémon Sun | `sun` |
-| VII | Pokémon Moon | `moon` |
-| VII | Pokémon Ultra Sun | `ultrasun` |
-| VII | Pokémon Ultra Moon | `ultramoon` |
+- A Flask website for reviewing Pokémon in a save file and in the active database.
+- Selective imports from the source save's party and PC boxes.
+- Selective exports from the database into an available PC box slot in the selected save.
+- An explicit **Finalize** step. Selections are staged until finalization.
+- Separate active (`pokemon`) and inactive (`inactive_pokemon`) database tables. An exported Pokémon is moved from the active table to the inactive table, retaining its database UID and stored record data.
+- Generation-specific save readers and writers for supported Generations I–VII formats.
+- Upload normalization: trailing bytes after the expected raw save length are trimmed from the server-side staged upload. Files that are too short are rejected rather than padded.
+- Retention of generation-native Pokémon record data in SQLite where the format requires the original record for safe export.
+- Checksum-aware save output using the corresponding generation handler.
 
-The program expects save data, not ROMs. `--game auto` (the default) validates the save format across Generations I–VII and selects the compatible reader/writer. Generation I accepts English Red/Blue/Yellow SRAM dumps; Generations II–V support the documented layouts noted below. Generations VI and VII require decrypted, PKHeX-compatible 3DS `main` save dumps: X/Y are `0x65600` bytes, Omega Ruby/Alpha Sapphire are `0x76000` bytes, Sun/Moon are `0x6BE00` bytes, and Ultra Sun/Ultra Moon are `0x6CC00` bytes. These handlers do not accept the encrypted outer 3DS save container; use a compatible save manager to export/import the decrypted `main` data. Some games share the same physical save layout (such as Red/Blue/Yellow or Diamond/Pearl), so auto mode may identify only the generation rather than claim an exact title. When the layout itself is ambiguous or fails validation, auto mode asks you to specify `--game` instead of guessing. Generation II detection uses its stored save checksums, while the Generation IV/V and Generation VI/VII readers validate their respective save structures.
+## Requirements
 
-## Installation
+- Python **3.10 or newer**.
+- Dependencies from `requirements.txt` (currently Flask 3.x).
+- A supported raw save file. ROM files are not accepted.
 
-Run the program with the Python environment and dependencies used by the project. From the project directory, see the command examples below. No external database server is needed; SQLite stores data in `chemspc.db` in the current working directory.
+## Installation and start-up
 
-## How extraction works
+Run these commands from the repository root.
 
-For a selected save file, the program:
-
-1. Reads Pokémon from the party and PC boxes.
-2. Inserts the extracted Pokémon as a batch in one SQLite transaction.
-3. Only after the database transaction succeeds, clears the extracted Pokémon from the in-memory party and PC boxes.
-4. Writes a new save next to the input file with the `.new` suffix.
-
-If the database insert fails, the program raises an error before writing the Pokémon-free save. The original save remains unchanged. This workflow is intended to reduce the risk of losing Pokémon during extraction, but it does not replace a separate backup.
-
-## Usage
-
-### Generation I: Red, Blue, Yellow (English)
+### Linux / macOS
 
 ```bash
-python main.py pokemon-red.sav --game red
-python main.py pokemon-blue.sav --game blue
-python main.py pokemon-yellow.sav --game yellow
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python main.py
 ```
 
-Generation I expects an English 32 KiB SRAM `.sav` dump. Oversized dumps (for example 128 KiB dumps from some Yellow tools) are accepted and only the first 32 KiB are used. The handler validates the main checksum, reads the active PC box from the live copy in bank 1, and reads the other boxes from the two PC-box banks. Uninitialized box banks are treated as empty, matching the game's save behavior. The 12 boxes contain 20 Pokémon each.
+### Windows PowerShell
 
-The Gen I parser converts standard internal species indexes to National Pokédex numbers for the common `species` database column and separately preserves the exact internal species index in `gen1_internal_species`. Generation I has stat experience rather than modern EVs; the values are stored in the existing stat fields as raw stat experience. The single Special stat is stored in `special_attack`, and `special_defense` is left `NULL`. The `held_item` field contains Gen I's catch-rate byte, not a held item.
-
-### Generation II: Gold / Silver
-
-Auto mode identifies checksum-valid Gold/Silver and Crystal saves without a game flag. Specify the shared Gold/Silver layout explicitly when desired:
-
-```bash
-python main.py pokemon-gold.sav
-python main.py pokemon-silver.sav --game gold-silver
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python main.py
 ```
 
-### Generation II: Crystal
+Open <http://127.0.0.1:5000> in your browser. `main.py` now starts the Flask website; the previous command-line extraction workflow is not the primary interface.
 
-```bash
-python main.py pokemon-crystal.sav --game crystal
-```
+The app listens on `127.0.0.1` by default. You may set `CHEMSPC_PORT` to change the port. `CHEMSPC_HOST` can change the bind address, but do not expose ChemSPC to an untrusted network: the app is designed for local use and does not implement user accounts or authentication. `CHEMSPC_SECRET_KEY` can be set to provide a stable Flask session secret.
 
-### Generation III: Ruby, Sapphire, Emerald, FireRed, LeafGreen
+## Using the website
 
-```bash
-python main.py pokemon-ruby.sav --game ruby
-python main.py pokemon-sapphire.sav --game sapphire
-python main.py pokemon-emerald.sav --game emerald
-python main.py pokemon-firered.sav --game firered
-python main.py pokemon-leafgreen.sav --game leafgreen
-```
+1. **Choose the exact game/version.** The website uses this choice to select the right parser and expected save size; it does not auto-detect the title.
+2. **Upload the save file.** The upload is staged on the server. If it is larger than the size expected for the selected game, trailing bytes are removed from the staged copy before parsing. The website reports how many bytes were removed. A shorter-than-required file is rejected.
+3. **Select Pokémon to import.** Pokémon in the source save's party and PC boxes are listed individually. Select the records to add to the active database.
+4. **Select Pokémon to export.** Active database entries are checked for generation compatibility and the data required to write them to the selected format. Exports are placed into PC storage, not directly into the party.
+5. **Review and finalize.** Finalization writes a separate output save and applies the selected database changes in a SQLite transaction. The page provides a link to download the generated save.
 
-Automatic detection is the default and can be used for any supported generation:
+Canceling the workflow abandons the staged selection without importing or exporting any Pokémon. Until finalization succeeds, the database is not changed by the selections. The uploaded local file on your computer is never modified; the generated save is a separate download.
 
-```bash
-python main.py pokemon.sav
-# Equivalent:
-python main.py pokemon.sav --game auto
-```
+### What finalization changes
 
-Auto mode identifies a compatible save layout from the file structure and checksums. It cannot determine exact titles when different games use the same layout; those imports are tagged with the generation-level source label rather than a guessed game title. You can always specify `--game` explicitly to set the title when you know it.
+- Each selected import is inserted into the active `pokemon` table and removed from the generated save's party/boxes.
+- Each selected export is added to a compatible, vacant PC storage slot in the generated save and moved from `pokemon` to `inactive_pokemon` in the database.
+- Pokémon that are not selected remain in the generated save.
+- If validation or the database transaction fails, the application reports an error and rolls back the database transaction rather than committing a partial transfer.
 
-### Generation IV: Diamond, Pearl, Platinum, HeartGold, SoulSilver
+Make a separate backup of your original save and database before use. Always test a generated save in an emulator or other appropriate environment before treating it as your primary save.
 
-```bash
-python main.py pokemon-diamond.sav --game diamond
-python main.py pokemon-pearl.sav --game pearl
-python main.py pokemon-platinum.sav --game platinum
-python main.py pokemon-heartgold.sav --game heartgold
-python main.py pokemon-soulsilver.sav --game soulsilver
-```
+## Supported games and save formats
 
-The Gen IV handler expects an unheadered 512 KiB (`524288` byte) raw save file, and validates the linked save blocks and their CRC-16-CCITT checksums before reading or writing them. Auto mode identifies the compatible layout family; Diamond/Pearl and HeartGold/SoulSilver each share a layout internally, so it does not infer the exact paired title.
+The handlers support the following titles and expected raw file sizes. Sizes are exact byte counts after upload normalization.
 
-### Generation V: Black, White, Black 2, White 2
+| Generation | Game/version | Selection | Required size | Required input format |
+|---|---|---|---:|---|
+| I | Pokémon Red | `red` | 32 KiB (`0x8000`) | English SRAM save |
+| I | Pokémon Blue | `blue` | 32 KiB (`0x8000`) | English SRAM save |
+| I | Pokémon Yellow | `yellow` | 32 KiB (`0x8000`) | English SRAM save |
+| II | Pokémon Gold | `gold-silver` | 32 KiB (`0x8000`) | English Gold/Silver layout |
+| II | Pokémon Silver | `gold-silver` | 32 KiB (`0x8000`) | English Gold/Silver layout |
+| II | Pokémon Crystal | `crystal` | 32 KiB (`0x8000`) | English Crystal layout |
+| III | Pokémon Ruby | `ruby` | 128 KiB (`0x20000`) | Raw save |
+| III | Pokémon Sapphire | `sapphire` | 128 KiB (`0x20000`) | Raw save |
+| III | Pokémon Emerald | `emerald` | 128 KiB (`0x20000`) | Raw save |
+| III | Pokémon FireRed | `firered` | 128 KiB (`0x20000`) | Raw save |
+| III | Pokémon LeafGreen | `leafgreen` | 128 KiB (`0x20000`) | Raw save |
+| IV | Pokémon Diamond | `diamond` | 512 KiB (`0x80000`) | Unheadered raw save |
+| IV | Pokémon Pearl | `pearl` | 512 KiB (`0x80000`) | Unheadered raw save |
+| IV | Pokémon Platinum | `platinum` | 512 KiB (`0x80000`) | Unheadered raw save |
+| IV | Pokémon HeartGold | `heartgold` | 512 KiB (`0x80000`) | Unheadered raw save |
+| IV | Pokémon SoulSilver | `soulsilver` | 512 KiB (`0x80000`) | Unheadered raw save |
+| V | Pokémon Black | `black` | 512 KiB (`0x80000`) | Unheadered raw save |
+| V | Pokémon White | `white` | 512 KiB (`0x80000`) | Unheadered raw save |
+| V | Pokémon Black 2 | `black2` | 512 KiB (`0x80000`) | Unheadered raw save |
+| V | Pokémon White 2 | `white2` | 512 KiB (`0x80000`) | Unheadered raw save |
+| VI | Pokémon X | `x` | `0x65600` bytes | Decrypted PKHeX-compatible 3DS `main` save |
+| VI | Pokémon Y | `y` | `0x65600` bytes | Decrypted PKHeX-compatible 3DS `main` save |
+| VI | Pokémon Omega Ruby | `omegaruby` | `0x76000` bytes | Decrypted PKHeX-compatible 3DS `main` save |
+| VI | Pokémon Alpha Sapphire | `alphasapphire` | `0x76000` bytes | Decrypted PKHeX-compatible 3DS `main` save |
+| VII | Pokémon Sun | `sun` | `0x6BE00` bytes | Decrypted PKHeX-compatible 3DS `main` save |
+| VII | Pokémon Moon | `moon` | `0x6BE00` bytes | Decrypted PKHeX-compatible 3DS `main` save |
+| VII | Pokémon Ultra Sun | `ultrasun` | `0x6CC00` bytes | Decrypted PKHeX-compatible 3DS `main` save |
+| VII | Pokémon Ultra Moon | `ultramoon` | `0x6CC00` bytes | Decrypted PKHeX-compatible 3DS `main` save |
 
-```bash
-python main.py pokemon-black.sav --game black
-python main.py pokemon-white.sav --game white
-python main.py pokemon-black2.sav --game black2
-python main.py pokemon-white2.sav --game white2
-```
+Generations VI and VII require the decrypted `main` save data, not the encrypted outer 3DS save container. Use a compatible save manager to export the decrypted file and to put a verified output back into your save container. Pokémon: Let's Go, Pikachu! and Pokémon: Let's Go, Eevee! are not supported.
 
-The Generation V handler expects an unheadered 512 KiB (`524288` byte) save. Black/White use `0x24000`-byte save copies; Black 2/White 2 use `0x26000`-byte copies. It validates the mirrored CRC-16-CCITT checksums for the 24 PC-box blocks and party block before extraction. Pokémon records are decrypted for parsing but retained in their original encrypted form when writing. Both valid save copies are updated after extraction, while unrelated save sections and the original input file are preserved.
+### How trailing-byte trimming works
 
-### Generation VI: X, Y, Omega Ruby, Alpha Sapphire
+The selected title determines the expected raw file size. If an upload is larger, ChemSPC truncates the server-side staged copy to that length before passing it to the parser. This is intended for emulator-added trailing data or oversized dumps where the supported save begins at byte zero. ChemSPC does not search for a save embedded at an offset, repair a truncated save, or turn an encrypted save container into a decrypted save. Selecting the wrong game can cause validation to fail; do not use trimming as a way to convert between save formats.
 
-```bash
-python main.py pokemon-x.main --game x
-python main.py pokemon-y.main --game y
-python main.py pokemon-omega-ruby.main --game omegaruby
-python main.py pokemon-alpha-sapphire.main --game alphasapphire
-```
+## Export compatibility and limitations
 
-The Generation VI handler supports decrypted PKHeX-compatible save data only (X/Y: `0x65600` bytes; Omega Ruby/Alpha Sapphire: `0x76000` bytes). It validates the `FEEB` footer marker plus the party and PC-box block metadata/checksums before extracting Pokémon. Gen VI has 31 PC boxes with 30 slots each. Party and box PK6 records are decrypted for parsing; retained original records are preserved byte-for-byte. After extraction, the handler clears the party and PC Pokémon, updates the affected block checksums, and writes a `.new` file. It does **not** encrypt/decrypt the outer 3DS DISA/IVFC container or handle console-specific authentication; use a compatible save manager to export the decrypted `main` file and import the output back into the save container.
+- **Cross-generation conversion is not implemented.** An exported Pokémon must match the generation of the target save.
+- Pokémon are exported into PC storage only. ChemSPC does not calculate or invent party stats for a boxed record.
+- The app validates supported species, move, and held-item ID ranges and required native record data. This is a format-compatibility check, **not** a complete legality analysis. Species-specific learnsets, every title-specific item restriction, encounter legality, and all other competitive/legal constraints are not exhaustively checked.
+- Generation I uses an internal species index that differs from the National Pokédex number. Its `held_item`-like field is actually the catch-rate byte, not a held item.
+- Generation II records can be written from the shared stored fields after range and text checks. Other generations generally require retained native binary Pokémon record data to preserve the format safely.
+- Existing database rows created before native record payloads were saved may not be exportable to Generations I or III–VII. Re-import those Pokémon from a supported save using the current version to capture their native record payload. Cross-generation conversions remain unavailable even when a row has a native payload.
+- Pokémon format details differ by generation. Fields that do not exist in a given generation may be empty, and some shared database fields have generation-specific meanings.
 
-### Generation VII: Sun, Moon, Ultra Sun, Ultra Moon (3DS only)
+Do not treat a save as proven safe just because it passes validation. Back up the source file, retain your existing save until the generated one has been tested, and report malformed saves rather than trying to force them through the parser.
 
-```bash
-python main.py pokemon-sun.main --game sun
-python main.py pokemon-moon.main --game moon
-python main.py pokemon-ultra-sun.main --game ultrasun
-python main.py pokemon-ultra-moon.main --game ultramoon
-```
+## Database
 
-The Generation VII handler supports the decrypted, PKHeX-compatible 3DS `main` save format only: Sun/Moon are `0x6BE00` bytes and Ultra Sun/Ultra Moon are `0x6CC00` bytes. It validates the `FEEB` footer marker and the party and PC-box block metadata/checksums. Generation VII has 32 PC boxes with 30 stored Pokémon slots each. Party PK7 records are 260 bytes and boxed PK7 records are 232 bytes; Pokémon record decryption is shared with Generation VI. Retained records are preserved byte-for-byte, and the writer updates the checksums for the party and box blocks after extraction. The encrypted outer 3DS save container is not supported; use a compatible save manager to export the decrypted `main` file and import the output back into the save container.
+ChemSPC uses SQLite; no external database server is required. By default the database is `chemspc.db` alongside `db.py`. Set `CHEMSPC_DATABASE` to use a different path.
 
-This project adds only the 3DS Generation VII games. **Pokémon: Let's Go, Pikachu! and Pokémon: Let's Go, Eevee! are not supported**; those games use a different save/Pokémon format.
+- `pokemon` contains active Pokémon available for export.
+- `inactive_pokemon` is a history table for exported Pokémon. The row's UID and retained record payload are preserved when it is moved.
+- `record_payload` stores generation-specific Pokémon metadata and native record bytes in JSON/base64 form so data can survive a database round trip without Python pickle.
 
-To see supported arguments:
+The app initializes the tables at startup and adds the `record_payload` column to existing active/inactive tables if it is missing. Back up your database before upgrading. Older records without retained native data remain in the database, but they may fail export compatibility checks for formats that need an original binary record.
 
-```bash
-python main.py --help
-```
-
-For example, running:
-
-```bash
-python main.py pokemon-emerald.sav --game emerald
-```
-
-leaves `pokemon-emerald.sav` unchanged and writes `pokemon-emerald.sav.new` if the import succeeds.
-
-## SQLite database
-
-The program writes to `chemspc.db` in the current working directory. It creates a `pokemon` table and an `inactive_pokemon` table used by the existing project data model. A schema migration adds missing nullable fields to older databases without deleting existing records.
-
-The shared schema stores generation and source-game information along with species, names, original trainer details, moves, experience, EVs/IVs, party stats, and other values available from each generation's parser. `gen1_internal_species` preserves Generation I internal species indexes, which differ from National Pokédex numbers.
-
-### Generation-specific data
-
-- `source_game`: the selected game/layout name, such as `emerald`, `firered`, `diamond`, or `soulsilver`.
-- `gen1_internal_species`: retains the internal species index used by English Red/Blue/Yellow; the common `species` column is converted to a National Pokédex number when the internal value maps to a normal species.
-- `special_attack_ev` and `special_defense_ev`: preserve the separate Special Attack and Special Defense EV values introduced in Generation III; `special_ev` remains for Generation II compatibility and holds their sum where appropriate.
-- `personality`, `ability`, `language`, `gender`, `nature`, `is_egg`, and `is_shiny`: parsed Generation III–VII identity and status fields where available.
-- `game_of_origin`, `met_location`, `egg_location`, `met_level`, `pokeball`, `encounter_type`, `egg_date`, `met_date`, and `original_trainer_gender`: Generation IV–VII encounter and origin metadata when exposed by a generation. Date fields are stored as raw packed three-byte values, avoiding an assumed date convention.
-
-Columns that do not apply to a particular game's format can be `NULL`. Fields that originate in one generation may have a different meaning in another; interpret generation-specific values with `generation` and `source_game` rather than assuming every field is uniform across all formats.
-
-The extraction inserts all Pokémon in one transaction. If any database insert fails, the transaction rolls back rather than leaving a partial batch.
+Staged uploads and generated output files are stored under Flask's `instance/` directory, in `instance/staging/` and `instance/exports/`. Keep this directory private and remove stale files when they are no longer needed; generated exports are not your only backup.
 
 ## Tests
 
-Run the test suite from the project root:
+Run the test suite from the repository root after installing requirements:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-The tests cover Generation I–VII format handling, save-block layouts and checksums, encrypted Pokémon records, SQLite schema migrations, and the extraction workflows for supported game labels using synthetic fixtures. Synthetic tests are useful regression checks, but **they do not replace testing with a known-good retail save and an emulator**. Generated saves have not been verified against every retail game in an emulator; always validate the `.new` file before using it as the primary save.
+The tests include generation-specific save parsing/writing, checksums and record layouts, database behavior, the Flask transfer workflow, and upload normalization across supported game sizes. Synthetic fixtures provide regression coverage but do not replace validation against known-good real save files and an emulator.
 
-## Project files
+## Project layout
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `main.py` | Command-line entry point and extraction-to-SQLite workflow |
-| `gen1.py` | Red, Blue, and Yellow save reader/writer |
-| `gen2.py` | Gold/Silver and Crystal save reader/writer |
-| `gen3.py` | Ruby, Sapphire, Emerald, FireRed, and LeafGreen save reader/writer |
-| `gen4.py` | Diamond, Pearl, Platinum, HeartGold, and SoulSilver save reader/writer |
-| `gen5.py` | Black, White, Black 2, and White 2 save reader/writer |
-| `gen6.py` | X, Y, Omega Ruby, and Alpha Sapphire decrypted save reader/writer |
-| `gen7.py` | Sun, Moon, Ultra Sun, and Ultra Moon decrypted save reader/writer |
-| `pokemon.py` | Shared Pokémon data model and Generation II record conversion |
-| `db.py` | SQLite schema, migrations, and transactional insert helpers |
-| `tests/` | Unit and integration tests |
+| `main.py` | Flask app, upload/review/finalize/download routes, and compatibility checks |
+| `save_formats.py` | Game registry, expected save sizes, upload trimming, and shared native-handler adapters |
+| `gen1.py`–`gen7.py` | Existing generation-specific save readers and writers; keep these files when applying an update |
+| `gen2.py` | Generation II Gold/Silver and Crystal save support and record serialization |
+| `pokemon.py` | Shared Pokémon data model |
+| `db.py` | SQLite persistence, native-record payload storage, and active/inactive table operations |
+| `templates/` | Flask HTML templates |
+| `static/` | CSS and other static browser assets |
+| `tests/` | Unit and workflow tests |
+| `requirements.txt` | Runtime dependencies |
+| `pyproject.toml` | Package metadata and test configuration |
 
-## Limitations
+## License
 
-- Generation VIII+ save handling is not implemented yet. Generation VII support is limited to the 3DS Sun/Moon/Ultra Sun/Ultra Moon titles; Let’s Go is intentionally excluded.
-- Generation I support is limited to English Red/Blue/Yellow saves. Common species indexes are mapped to National Dex numbers; glitch species retain their raw internal index but use species `0` in the common field when no National Dex mapping exists. Generation I stat experience is stored in existing EV columns as raw stat experience. The writer preserves existing Pokémon records and supports removal; it does not synthesize new Gen I records.
-- Generation II–V handlers target documented English save layouts. The Generation IV text decoder handles standard letters, digits, and common punctuation; uncommon symbols or language-specific characters may display as `?` in SQLite. The original encrypted Pokémon records are retained in the save when Pokémon are preserved.
-- The Generation IV–VII handlers are intended for extraction/clearing of existing party and PC Pokémon records. They do not create new Pokémon records from just a species/name or re-encode arbitrary Pokémon field edits. The Generation V/VI/VII readers preserve common text fields for parsing; uncommon symbols and some language-specific glyphs may render as `?` in SQLite, while retained encrypted records remain unchanged.
-- Some game-specific or less common Pokémon metadata is not yet normalized into friendly text values. Generation IV–VII encounter dates are retained as packed raw values. Generation V gender is left unset in SQLite because it requires species-specific gender-ratio rules.
-- Verify output with real saves and an emulator before relying on it. Always retain backups of original save files.
+ChemSPC is distributed under the license in [`LICENSE`](LICENSE) (GPL-3.0-or-later).

@@ -13,7 +13,7 @@ from save_formats import GAME_SPECS, supported_games
 from pokemon import Pokemon
 
 
-class ChemSPCWorkflowTests(unittest.TestCase):
+class ChemsPCWorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         root = Path(self.temp.name)
