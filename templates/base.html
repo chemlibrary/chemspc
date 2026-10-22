@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}ChemSPC{% endblock %}</title>
+  <title>{% block title %}Chems PC{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header class="site-header">
     <div class="header-inner">
-      <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark">C</span><span>ChemSPC <small>Pokémon Save Storage</small></span></a>
+      <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark">C</span><span>Chems PC <small>Pokémon Save Storage</small></span></a>
       <span class="generation-badge">GEN I–VII · SAVE TRANSFER</span>
     </div>
   </header>
@@ -20,7 +20,7 @@
       </section>{% endif %}
     {% endwith %}
     {% block content %}{% endblock %}
-    <footer>Local save utility · Keep a backup of your original save file before transferring Pokémon.</footer>
+    <footer>ChemsPC© 2026 Chem · Local save utility · Keep a backup of your original save file before transferring Pokémon.</footer>
   </main>
 </body>
 </html>
