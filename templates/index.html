@@ -2,9 +2,9 @@
 {% block title %}ChemSPC · Pokémon Storage{% endblock %}
 {% block content %}
 <section class="hero">
-  <div class="eyebrow">YOUR RETRO PC BOX</div>
+  <div class="eyebrow">YOUR CROSS-GENERATION POKÉ PC</div>
   <h1>Move Pokémon safely.<br><span>On your terms.</span></h1>
-  <p>Choose exactly which Pokémon to move between an English Gold/Silver save and your ChemSPC database. Review every selection before any changes are committed.</p>
+  <p>Review a supported Generation I–VII save, choose exactly which Pokémon to import or export, then finalize the database changes and create a new save copy.</p>
   <div class="hero-stats">
     <div><strong>{{ active|length }}</strong><span>Active in database</span></div>
     <div><strong>{{ inactive_count }}</strong><span>In inactive history</span></div>
@@ -13,22 +13,33 @@
 
 <section class="panel upload-panel">
   <div class="panel-heading"><div><div class="eyebrow">STEP 01</div><h2>Open a save file</h2></div><span class="step-number">01</span></div>
-  <p class="muted">Upload a raw 32 KiB English Pokémon Gold or Silver save. The original upload is kept unchanged; finalizing produces a new save file to download.</p>
-  <form action="{{ url_for('open_save') }}" method="post" enctype="multipart/form-data" class="upload-form">
+  <p class="muted">Choose the exact game/version before uploading. The native handler validates the save structure; your uploaded original stays unchanged, and finalization produces a separate file to download.</p>
+  <form action="{{ url_for('open_save_route') }}" method="post" enctype="multipart/form-data" class="upload-form generation-upload-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="file-picker"><span class="upload-icon">↑</span><span><strong>Choose your save file</strong><small>.sav · exactly 32,768 bytes</small></span><input type="file" name="save_file" accept=".sav,.srm,application/octet-stream" required></label>
-    <button class="button button-primary" type="submit">Load Pokémon <span>→</span></button>
+    <div class="game-field">
+      <label class="field-label" for="game-select">Game / save format</label>
+      <select id="game-select" name="game" class="game-select" required>
+        <option value="" selected disabled>Select your game…</option>
+        {% for game_key, label, generation, description in games %}
+        <option value="{{ game_key }}">Generation {{ generation }} · {{ label }} — {{ description }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="upload-controls">
+      <label class="file-picker"><span class="upload-icon">↑</span><span><strong>Choose your save file</strong><small>Use a raw save dump in the format listed above</small></span><input type="file" name="save_file" accept=".sav,.srm,.main,.dat,.bin,application/octet-stream" required></label>
+      <button class="button button-primary" type="submit">Load Pokémon <span>→</span></button>
+    </div>
   </form>
-  <div class="safety-note"><span>✓</span><span><strong>Nothing changes yet.</strong> Pokémon selections are staged until you press “Finalize transfer”.</span></div>
+  <div class="safety-note"><span>✓</span><span><strong>Nothing changes yet.</strong> Import/export selections remain staged until you press “Finalize transfer”.</span></div>
 </section>
 
 <section class="panel db-panel">
   <div class="panel-heading"><div><div class="eyebrow">YOUR COLLECTION</div><h2>Active database Pokémon</h2></div><span class="count-pill">{{ active|length }} Pokémon</span></div>
   {% if active %}
-  <div class="table-wrap"><table><thead><tr><th>Pokémon</th><th>Species ID</th><th>Gen</th><th>Held item</th><th>Moves</th></tr></thead><tbody>
-  {% for p in active %}<tr><td><strong>{{ p.name or 'Unnamed' }}</strong><small class="subline">UID {{ p.uid }} · Lv. {{ p.level }}</small></td><td>#{{ p.species }}</td><td><span class="tag">{{ p.generation }}</span></td><td>{{ p.held_item }}</td><td class="move-cell">{{ [p.move1, p.move2, p.move3, p.move4]|select('ne', 0)|join(', ') or '—' }}</td></tr>{% endfor %}
+  <div class="table-wrap"><table><thead><tr><th>Pokémon</th><th>Species ID</th><th>Gen</th><th>Held item / Gen I catch rate</th><th>Moves</th></tr></thead><tbody>
+  {% for p in active %}<tr><td><strong>{{ p.name or 'Unnamed' }}</strong><small class="subline">UID {{ p.uid }} · Lv. {{ p.level if p.level is not none else 'stored' }}</small></td><td>#{{ p.species }}</td><td><span class="tag">{{ p.generation }}</span></td><td>{{ p.held_item }}</td><td class="move-cell">{{ [p.move1, p.move2, p.move3, p.move4]|select('ne', 0)|join(', ') or '—' }}</td></tr>{% endfor %}
   </tbody></table></div>
   {% else %}<div class="empty-state"><div class="empty-icon">◌</div><strong>Your storage is empty</strong><p>Open a save file and import some Pokémon to begin.</p></div>{% endif %}
 </section>
-<div class="scope-note"><strong>Current support:</strong> English Pokémon Gold/Silver save layout and Generation II Pokémon/item/move ID ranges. Crystal, non-English saves, and move-learnset legality checks are not yet supported.</div>
+<div class="scope-note"><strong>Support scope:</strong> English Generation I–V save layouts plus decrypted PKHeX-compatible Generation VI/VII 3DS main saves. The selected title controls the save layout and known species/item ID caps. Exports stay within the same generation and use retained native records where required; full title-specific item catalogs and species-specific move legality are not verified.</div>
 {% endblock %}

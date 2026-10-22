@@ -10,29 +10,50 @@ from pokemon import Pokemon
 SAVE_SIZE = 32768
 PARTY_START = 10378
 PARTY_SIZE = 428
-BOX_START = 16384
+BOX_START = 0x4000
 BOX_COUNT = 14
 BOX_SIZE = 1104
+BOX_DATA_SIZE = BOX_SIZE - 2
 BOX_SEGMENT_SIZE = BOX_COUNT * BOX_SIZE
+BOX_OFFSETS = tuple(
+    [0x4000 + i * BOX_SIZE for i in range(7)]
+    + [0x6000 + i * BOX_SIZE for i in range(7)]
+)
+CURRENT_BOX_NUMBER_OFFSET = 0x2724
+CURRENT_BOX_OFFSET = 0x2D6C
+CRYSTAL_PARTY_START = 0x2865
+CRYSTAL_CURRENT_BOX_NUMBER_OFFSET = 0x2700
+CRYSTAL_CURRENT_BOX_OFFSET = 0x2D10
 PARTY_LIMIT = 6
 BOX_LIMIT = 20
+_GS_BACKUP_REGIONS = (
+    (0x2009, 0x222E, 0x15C7),
+    (0x222F, 0x23D8, 0x3D96),
+    (0x23D9, 0x2855, 0x0C6B),
+    (0x2856, 0x2889, 0x7E39),
+    (0x288A, 0x2D68, 0x10E8),
+)
 
 
 class Gen2_Save:
-    """Read and modify English Generation II Gold/Silver .sav files.
+    """Read and modify English Pokémon Gold/Silver saves.
 
-    The source file is never overwritten by :meth:`write_save`; output is written
-    to a separate path supplied by the caller (or ``<source>.new`` by default).
-    This implementation intentionally does not claim support for Crystal or
-    non-English save layouts.
+    Save writes use the retail box banks and checksum/backup locations. The
+    source is never overwritten; output goes to an explicit path or ``.new``.
     """
+    game_name = "gold-silver"
+    is_gold_silver = True
+    party_offset = PARTY_START
+    current_box_number_offset = CURRENT_BOX_NUMBER_OFFSET
+    current_box_offset = CURRENT_BOX_OFFSET
 
     def __init__(self, path: str | os.PathLike | None = None):
         self.save_size = SAVE_SIZE
-        self.party_list_start_offset = PARTY_START
+        self.party_list_start_offset = self.party_offset
         self.party_ots_start_offset = 8 + (6 * 48)
         self.party_names_start_offset = self.party_ots_start_offset + (11 * 6)
         self.box_lists_start_offset = BOX_START
+        self.box_offsets = BOX_OFFSETS
         self.party_pokemon: list[Pokemon] = []
         self.box_pokemon: list[list[Pokemon]] = [[] for _ in range(BOX_COUNT)]
         self.save_bytes = bytearray(SAVE_SIZE)
@@ -66,9 +87,10 @@ class Gen2_Save:
                 print(f"Box {box_no}, slot {slot_no}: {pokemon.name} (#{pokemon.species}) - lvl {pokemon.level}")
 
     def extract_gen2_party_pokemon(self) -> list[Pokemon]:
-        region = self.save_bytes[PARTY_START:PARTY_START + PARTY_SIZE]
+        start = self.party_list_start_offset
+        region = self.save_bytes[start:start + PARTY_SIZE]
         if len(region) != PARTY_SIZE:
-            raise ValueError("Save is too short to contain the Gold/Silver party data")
+            raise ValueError("Save is too short to contain the Generation II party data")
         count = region[0]
         if count > PARTY_LIMIT:
             raise ValueError(f"Invalid party count ({count}); expected 0-{PARTY_LIMIT}")
@@ -85,36 +107,44 @@ class Gen2_Save:
             results.append(pokemon)
         return results
 
+    @staticmethod
+    def _parse_box_bytes(box: bytes | bytearray, box_number: int) -> list[Pokemon]:
+        if len(box) < BOX_DATA_SIZE:
+            raise ValueError(f"PC box {box_number} data is incomplete")
+        count = box[0]
+        if count > BOX_LIMIT:
+            raise ValueError(f"Invalid Pokémon count ({count}) in box {box_number}")
+        ots_start = 22 + BOX_LIMIT * 32
+        names_start = ots_start + BOX_LIMIT * 11
+        contents: list[Pokemon] = []
+        for slot_index in range(count):
+            data = box[22 + slot_index * 32:22 + (slot_index + 1) * 32]
+            pokemon = Pokemon()
+            pokemon.init_gen2(data, party_pokemon=False)
+            if pokemon.species == 0:
+                continue
+            pokemon.original_trainer_name = decode_gen2_text(
+                box[ots_start + slot_index * 11:ots_start + (slot_index + 1) * 11]
+            )
+            pokemon.name = decode_gen2_text(
+                box[names_start + slot_index * 11:names_start + (slot_index + 1) * 11]
+            )
+            contents.append(pokemon)
+        return contents
+
     def extract_gen2_pokemon_boxes(self) -> list[list[Pokemon]]:
-        start = BOX_START
-        end = start + BOX_SEGMENT_SIZE
-        region = self.save_bytes[start:end]
-        if len(region) != BOX_SEGMENT_SIZE:
-            raise ValueError("Save is too short to contain the Gold/Silver box data")
         boxes: list[list[Pokemon]] = []
-        for box_index in range(BOX_COUNT):
-            box = region[box_index * BOX_SIZE:(box_index + 1) * BOX_SIZE]
-            count = box[0]
-            if count > BOX_LIMIT:
-                raise ValueError(f"Invalid Pokémon count ({count}) in box {box_index + 1}")
-            ots_start = 22 + 20 * 32
-            names_start = ots_start + 20 * 11
-            contents: list[Pokemon] = []
-            for slot_index in range(count):
-                data = box[22 + slot_index * 32:22 + (slot_index + 1) * 32]
-                pokemon = Pokemon()
-                pokemon.init_gen2(data, party_pokemon=False)
-                if pokemon.species == 0:
-                    # Ignore malformed/empty records even if the count byte is wrong.
-                    continue
-                pokemon.original_trainer_name = decode_gen2_text(
-                    box[ots_start + slot_index * 11:ots_start + (slot_index + 1) * 11]
-                )
-                pokemon.name = decode_gen2_text(
-                    box[names_start + slot_index * 11:names_start + (slot_index + 1) * 11]
-                )
-                contents.append(pokemon)
-            boxes.append(contents)
+        for box_index, offset in enumerate(self.box_offsets):
+            raw = self.save_bytes[offset:offset + BOX_SIZE]
+            if len(raw) != BOX_SIZE:
+                raise ValueError(f"Save is too short to contain PC box {box_index + 1}")
+            boxes.append(self._parse_box_bytes(raw, box_index + 1))
+        current_box = self.save_bytes[self.current_box_number_offset] & 0x0F
+        if current_box >= BOX_COUNT:
+            raise ValueError(f"Invalid current PC box index: {current_box}")
+        live = self.save_bytes[self.current_box_offset:self.current_box_offset + BOX_DATA_SIZE]
+        if len(live) == BOX_DATA_SIZE:
+            boxes[current_box] = self._parse_box_bytes(live, current_box + 1)
         return boxes
 
     def export_gen2_party_list(self) -> bytearray:
@@ -170,25 +200,38 @@ class Gen2_Save:
         return result
 
     def update_gold_silver_checksums(self) -> bool:
-        primary = sum(self.save_bytes[8201:11624]) % 65536
-        secondary = (sum(self.save_bytes[3179:6124]) + sum(self.save_bytes[15766:16191]) + sum(self.save_bytes[32313:32364])) % 65536
-        self.save_bytes[11625:11627] = primary.to_bytes(2, "big")
-        self.save_bytes[32365:32367] = secondary.to_bytes(2, "big")
+        for primary_start, primary_end, backup_start in _GS_BACKUP_REGIONS:
+            self.save_bytes[backup_start:backup_start + primary_end - primary_start + 1] = self.save_bytes[primary_start:primary_end + 1]
+        primary = sum(self.save_bytes[0x2009:0x2D69]) & 0xFFFF
+        secondary = (
+            sum(self.save_bytes[0x0C6B:0x17ED])
+            + sum(self.save_bytes[0x3D96:0x3F40])
+            + sum(self.save_bytes[0x7E39:0x7E6D])
+        ) & 0xFFFF
+        self.save_bytes[0x2D69:0x2D6B] = primary.to_bytes(2, "little")
+        self.save_bytes[0x7E6D:0x7E6F] = secondary.to_bytes(2, "little")
         return True
 
-    def write_save(self, path: str | os.PathLike | None = None, gold_silver: bool = True) -> str:
-        """Write a new save image and return its path; never overwrite the source.
+    def _finalize_checksums(self) -> None:
+        self.update_gold_silver_checksums()
 
-        ``gold_silver`` is kept for source compatibility with the old API. Only
-        Gold/Silver save offsets are supported by this version.
-        """
-        if not gold_silver:
-            raise ValueError("Crystal save layouts are not supported yet; refusing to write using Gold/Silver offsets")
+    def write_save(self, path: str | os.PathLike | None = None, gold_silver: bool | None = None) -> str:
+        """Write a new save image and return its path; never overwrite the source."""
+        if gold_silver is not None and bool(gold_silver) != bool(self.is_gold_silver):
+            raise ValueError(f"Cannot write this {self.game_name} save using the requested Generation II layout")
         party = self.export_gen2_party_list()
         boxes = self.export_gen2_boxes()
-        self.save_bytes[PARTY_START:PARTY_START + PARTY_SIZE] = party
-        self.save_bytes[BOX_START:BOX_START + BOX_SEGMENT_SIZE] = boxes
-        self.update_gold_silver_checksums()
+        self.save_bytes[self.party_list_start_offset:self.party_list_start_offset + PARTY_SIZE] = party
+        for index, offset in enumerate(self.box_offsets):
+            start = index * BOX_SIZE
+            self.save_bytes[offset:offset + BOX_SIZE] = boxes[start:start + BOX_SIZE]
+        current_box = self.save_bytes[self.current_box_number_offset] & 0x0F
+        if current_box >= BOX_COUNT:
+            raise ValueError(f"Invalid current PC box index: {current_box}")
+        current_start = current_box * BOX_SIZE
+        current_bytes = boxes[current_start:current_start + BOX_DATA_SIZE]
+        self.save_bytes[self.current_box_offset:self.current_box_offset + BOX_DATA_SIZE] = current_bytes
+        self._finalize_checksums()
         destination = Path(path) if path is not None else Path(f"{self.path}.new")
         destination.parent.mkdir(parents=True, exist_ok=True)
         fd, temporary_name = tempfile.mkstemp(prefix=f".{destination.name}.", suffix=".tmp", dir=str(destination.parent))
@@ -262,3 +305,28 @@ def encode_gen2_text(text: str, *, add_terminator: bool = True) -> bytes:
     if add_terminator:
         encoded.append(0x50)
     return bytes(encoded)
+
+
+class Crystal_Save(Gen2_Save):
+    """Reader/writer for English Pokémon Crystal saves (distinct Gen II layout)."""
+    game_name = "crystal"
+    is_gold_silver = False
+    party_offset = CRYSTAL_PARTY_START
+    current_box_number_offset = CRYSTAL_CURRENT_BOX_NUMBER_OFFSET
+    current_box_offset = CRYSTAL_CURRENT_BOX_OFFSET
+
+    def update_crystal_checksums(self) -> bool:
+        primary = bytes(self.save_bytes[0x2009:0x2B83])
+        if len(primary) != 0x2B83 - 0x2009:
+            raise ValueError("Save data is truncated while synchronizing Crystal backup data")
+        self.save_bytes[0x1209:0x1D83] = primary
+        self.save_bytes[0x2D0D:0x2D0F] = (sum(self.save_bytes[0x2009:0x2B83]) & 0xFFFF).to_bytes(2, "little")
+        self.save_bytes[0x1F0D:0x1F0F] = (sum(self.save_bytes[0x1209:0x1D83]) & 0xFFFF).to_bytes(2, "little")
+        self.save_bytes[0x2008] = 0x63
+        self.save_bytes[0x2D0F] = 0x7F
+        self.save_bytes[0x1208] = 0x63
+        self.save_bytes[0x1F0F] = 0x7F
+        return True
+
+    def _finalize_checksums(self) -> None:
+        self.update_crystal_checksums()

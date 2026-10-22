@@ -1,6 +1,11 @@
-"""Generation II Pokémon data model and binary serialization helpers."""
-from __future__ import annotations
+"""Shared Pokémon fields plus the Generation II serializer.
 
+The native Generation I and III–VII save handlers attach format-specific
+attributes (encrypted records, snapshots, names, and slot metadata) at parse
+ time. The database payload preserves those attributes for lossless same-gen
+ exports. Core fields remain scalar and compatible with the SQLite schema.
+"""
+from __future__ import annotations
 from dataclasses import dataclass
 
 
@@ -38,6 +43,8 @@ class Pokemon:
     defense_ev: int = 0
     speed_ev: int = 0
     special_ev: int = 0
+    special_attack_ev: int = 0
+    special_defense_ev: int = 0
     iv: int = 0
     move1_pp: int = 0
     move2_pp: int = 0
@@ -46,7 +53,7 @@ class Pokemon:
     friendship: int = 0
     pokerus: int = 0
     caught: int = 0
-    level: int = 0
+    level: int | None = 0
     status_condition: int = 0
     current_hp: int = 0
     max_hp: int = 0
@@ -55,9 +62,18 @@ class Pokemon:
     speed: int = 0
     special_attack: int = 0
     special_defense: int = 0
+    game_of_origin: int | None = None
+    met_location: int | None = None
+    egg_location: int | None = None
+    met_level: int | None = None
+    pokeball: int | None = None
+    encounter_type: int | None = None
+    egg_date: int | None = None
+    met_date: int | None = None
+    original_trainer_gender: int | None = None
+    gen1_internal_species: int | None = None
 
     def init_gen2(self, data: bytes | bytearray, party_pokemon: bool = False) -> None:
-        """Populate this instance from a Generation II Pokémon data block."""
         expected = 48 if party_pokemon else 32
         if len(data) != expected:
             raise ValueError(f"Generation II Pokémon data must be {expected} bytes")
@@ -80,7 +96,6 @@ class Pokemon:
         self.level = data[31]
         if party_pokemon:
             self.status_condition = data[32]
-            # Byte 33 is unused in party Pokémon blocks.
             self.current_hp = _read_int(data[34:36], 2)
             self.max_hp = _read_int(data[36:38], 2)
             self.attack = _read_int(data[38:40], 2)
@@ -89,17 +104,11 @@ class Pokemon:
             self.special_attack = _read_int(data[44:46], 2)
             self.special_defense = _read_int(data[46:48], 2)
         else:
-            self.status_condition = 0
-            self.current_hp = 0
-            self.max_hp = 0
-            self.attack = 0
-            self.defense = 0
-            self.speed = 0
-            self.special_attack = 0
-            self.special_defense = 0
+            self.status_condition = self.current_hp = self.max_hp = 0
+            self.attack = self.defense = self.speed = 0
+            self.special_attack = self.special_defense = 0
 
     def export_gen2(self, party_pokemon: bool = False) -> bytearray:
-        """Serialize to a 32-byte box block or 48-byte party block."""
         raw = bytearray()
         raw.append(int(self.species))
         raw.append(int(self.held_item))
@@ -109,12 +118,12 @@ class Pokemon:
         for key in ("hp_ev", "attack_ev", "defense_ev", "speed_ev", "special_ev", "iv"):
             raw.extend(_write_int(getattr(self, key), 2, key))
         for key in ("move1_pp", "move2_pp", "move3_pp", "move4_pp", "friendship", "pokerus"):
-            raw.append(int(_write_int(getattr(self, key), 1, key)[0]))
+            raw.append(_write_int(getattr(self, key), 1, key)[0])
         raw.extend(_write_int(self.caught, 2, "caught"))
-        raw.append(int(_write_int(self.level, 1, "level")[0]))
+        raw.append(_write_int(self.level or 0, 1, "level")[0])
         if party_pokemon:
-            raw.append(int(_write_int(self.status_condition, 1, "status_condition")[0]))
-            raw.append(0)  # Unused byte in the party structure.
+            raw.append(_write_int(self.status_condition, 1, "status_condition")[0])
+            raw.append(0)
             for key in ("current_hp", "max_hp", "attack", "defense", "speed", "special_attack", "special_defense"):
                 raw.extend(_write_int(getattr(self, key), 2, key))
         expected = 48 if party_pokemon else 32
@@ -122,6 +131,5 @@ class Pokemon:
             raise AssertionError(f"Internal serializer error: expected {expected} bytes, got {len(raw)}")
         return raw
 
-    # Original public API is retained for callers in older scripts.
     def export_gen2_bytes(self, party_pokemon: bool = False) -> bytes:
         return bytes(self.export_gen2(party_pokemon=party_pokemon))

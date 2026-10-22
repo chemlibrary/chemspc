@@ -8,7 +8,8 @@ from pathlib import Path
 
 import db
 import main
-from gen2 import Gen2_Save
+from gen2 import Crystal_Save, Gen2_Save
+from save_formats import GAME_SPECS, supported_games
 from pokemon import Pokemon
 
 
@@ -59,10 +60,41 @@ class ChemSPCWorkflowTests(unittest.TestCase):
     def upload_save(self, path: Path):
         return self.client.post(
             "/open-save",
-            data={"csrf_token": self.csrf(), "save_file": (io.BytesIO(path.read_bytes()), "test.sav")},
+            data={"csrf_token": self.csrf(), "game": "gold-silver", "save_file": (io.BytesIO(path.read_bytes()), "test.sav")},
             content_type="multipart/form-data",
             follow_redirects=True,
         )
+
+    def test_registry_covers_the_repository_supported_generations(self):
+        generations = {spec.generation for spec in GAME_SPECS.values()}
+        self.assertEqual(generations, set(range(1, 8)))
+        self.assertGreaterEqual(len(supported_games()), 25)
+
+    def test_database_round_trip_preserves_native_record_payload(self):
+        pokemon = Pokemon(generation=4, name="Porygon", species=137)
+        pokemon.gen4_box_record = bytes([0xA5]) * 136
+        pokemon.gen4_box_index = 4
+        pokemon.gen4_box_slot = 12
+        db.add_pokemon(pokemon)
+        row = db.list_pokemon(active=True)[0]
+        restored = db.row_to_pokemon(row)
+        self.assertEqual(restored.gen4_box_record, pokemon.gen4_box_record)
+        self.assertEqual(restored.gen4_box_index, 4)
+        self.assertEqual(restored.gen4_box_slot, 12)
+
+    def test_crystal_uses_its_own_layout_and_checksums(self):
+        original = Path(self.temp.name) / "crystal-source.sav"
+        original.write_bytes(bytes(32768))
+        save = Crystal_Save(original)
+        pokemon = self.valid_pokemon()
+        save.party_pokemon = [pokemon]
+        output = Path(self.temp.name) / "crystal-output.sav"
+        save.write_save(output)
+        parsed = Crystal_Save(output)
+        self.assertEqual(len(parsed.party_pokemon), 1)
+        self.assertEqual(parsed.party_pokemon[0].name, "Pika")
+        self.assertEqual(parsed.save_bytes[0x2008], 0x63)
+        self.assertEqual(parsed.save_bytes[0x1208], 0x63)
 
     def test_save_round_trip_rebuilds_party_and_boxes(self):
         path = self.make_save(Path(self.temp.name) / "initial.sav", [self.valid_pokemon()])
@@ -112,8 +144,9 @@ class ChemSPCWorkflowTests(unittest.TestCase):
         output = Path(self.temp.name) / "exported.sav"
         output.write_bytes(downloaded.data)
         parsed = Gen2_Save(output)
-        self.assertEqual(len(parsed.party_pokemon), 1)
-        self.assertEqual(parsed.party_pokemon[0].name, "Pika")
+        self.assertEqual(len(parsed.party_pokemon), 0)
+        self.assertEqual(sum(len(box) for box in parsed.box_pokemon), 1)
+        self.assertEqual(parsed.box_pokemon[0][0].name, "Pika")
 
     def test_incompatible_generation_cannot_be_exported(self):
         pokemon = self.valid_pokemon()
@@ -124,7 +157,7 @@ class ChemSPCWorkflowTests(unittest.TestCase):
         self.upload_save(path)
         response = self.client.post("/finalize", data={"csrf_token": self.csrf(), "export_uid": str(row["uid"])}, follow_redirects=True)
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Only Generation II Pokémon".encode(), response.data)
+        self.assertIn("cannot be exported to Generation 2".encode(), response.data)
         self.assertEqual(len(db.list_pokemon(active=True)), 1)
         self.assertEqual(len(db.list_pokemon(active=False)), 0)
 
