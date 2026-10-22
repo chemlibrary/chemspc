@@ -1,8 +1,8 @@
-# ChemSPC
+# ChemsPC
 
-ChemSPC is a local web-based Pokémon storage manager for supported English Pokémon save formats from **Generations I–VII**. It provides a shared SQLite collection where you can selectively import Pokémon from a game save and export compatible Pokémon back into a save of the same generation.
+ChemsPC is a local web-based Pokémon storage manager for supported English Pokémon save formats from **Generations I–VII**. It provides a shared SQLite collection where you can selectively import Pokémon from a game save and export compatible Pokémon back into a save of the same generation.
 
-ChemSPC is intended for personal, local use. It is not a save editor for arbitrary changes, a cross-generation converter, or a complete Pokémon legality checker.
+ChemsPC is intended for personal, local use. It is not a save editor for arbitrary changes, a cross-generation converter, or a complete Pokémon legality checker.
 
 ## Features
 
@@ -46,7 +46,7 @@ python main.py
 
 Open <http://127.0.0.1:5000> in your browser. `main.py` now starts the Flask website; the previous command-line extraction workflow is not the primary interface.
 
-The app listens on `127.0.0.1` by default. You may set `CHEMSPC_PORT` to change the port. `CHEMSPC_HOST` can change the bind address, but do not expose ChemSPC to an untrusted network: the app is designed for local use and does not implement user accounts or authentication. `CHEMSPC_SECRET_KEY` can be set to provide a stable Flask session secret.
+The app listens on `127.0.0.1` by default. You may set `CHEMSPC_PORT` to change the port. `CHEMSPC_HOST` can change the bind address, but do not expose ChemsPC to an untrusted network: the app is designed for local use and does not implement user accounts or authentication. `CHEMSPC_SECRET_KEY` can be set to provide a stable Flask session secret.
 
 ## Using the website
 
@@ -106,12 +106,12 @@ Generations VI and VII require the decrypted `main` save data, not the encrypted
 
 ### How trailing-byte trimming works
 
-The selected title determines the expected raw file size. If an upload is larger, ChemSPC truncates the server-side staged copy to that length before passing it to the parser. This is intended for emulator-added trailing data or oversized dumps where the supported save begins at byte zero. ChemSPC does not search for a save embedded at an offset, repair a truncated save, or turn an encrypted save container into a decrypted save. Selecting the wrong game can cause validation to fail; do not use trimming as a way to convert between save formats.
+The selected title determines the expected raw file size. If an upload is larger, ChemsPC truncates the server-side staged copy to that length before passing it to the parser. This is intended for emulator-added trailing data or oversized dumps where the supported save begins at byte zero. ChemsPC does not search for a save embedded at an offset, repair a truncated save, or turn an encrypted save container into a decrypted save. Selecting the wrong game can cause validation to fail; do not use trimming as a way to convert between save formats.
 
 ## Export compatibility and limitations
 
 - **Cross-generation conversion is not implemented.** An exported Pokémon must match the generation of the target save.
-- Pokémon are exported into PC storage only. ChemSPC does not calculate or invent party stats for a boxed record.
+- Pokémon are exported into PC storage only. ChemsPC does not calculate or invent party stats for a boxed record.
 - The app validates supported species, move, and held-item ID ranges and required native record data. This is a format-compatibility check, **not** a complete legality analysis. Species-specific learnsets, every title-specific item restriction, encounter legality, and all other competitive/legal constraints are not exhaustively checked.
 - Generation I uses an internal species index that differs from the National Pokédex number. Its `held_item`-like field is actually the catch-rate byte, not a held item.
 - Generation II records can be written from the shared stored fields after range and text checks. Other generations generally require retained native binary Pokémon record data to preserve the format safely.
@@ -122,7 +122,7 @@ Do not treat a save as proven safe just because it passes validation. Back up th
 
 ## Database
 
-ChemSPC uses SQLite; no external database server is required. By default the database is `chemspc.db` alongside `db.py`. Set `CHEMSPC_DATABASE` to use a different path.
+ChemsPC uses SQLite; no external database server is required. By default the database is `chemspc.db` alongside `db.py`. Set `CHEMSPC_DATABASE` to use a different path.
 
 - `pokemon` contains active Pokémon available for export.
 - `inactive_pokemon` is a history table for exported Pokémon. The row's UID and retained record payload are preserved when it is moved.
@@ -160,4 +160,4 @@ The tests include generation-specific save parsing/writing, checksums and record
 
 ## License
 
-ChemSPC is distributed under the license in [`LICENSE`](LICENSE) (GPL-3.0-or-later).
+ChemsPC is distributed under the license in [`LICENSE`](LICENSE) (GPL-3.0-or-later).
