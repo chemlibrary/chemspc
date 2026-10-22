@@ -1,6 +1,6 @@
 [project]
 name = "chemspc"
-version = "0.2.0"
+version = "0.7.0"
 description = "A local web interface for managing Pokémon in English Generation II Gold/Silver save files."
 requires-python = ">=3.10"
 license = { text = "GPL-3.0-or-later" }
