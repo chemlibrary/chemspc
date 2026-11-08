@@ -7,20 +7,21 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="site-header">
     <div class="header-inner">
-      <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark">C</span><span>Chems PC <small>Pokémon Save Storage</small></span></a>
-      <span class="generation-badge">GEN I–VII · SAVE TRANSFER</span>
+      <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark" aria-hidden="true">C</span><span>Chems PC <small>YOUR PERSONAL STORAGE SYSTEM</small></span></a>
+      <span class="generation-badge"><span class="status-light" aria-hidden="true"></span> GEN I–VII <span class="badge-divider">/</span> LOCAL STORAGE</span>
     </div>
   </header>
-  <main class="container">
+  <main class="container" id="main-content">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}<section class="alerts" aria-live="polite">
         {% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}
       </section>{% endif %}
     {% endwith %}
     {% block content %}{% endblock %}
-    <footer>ChemsPC© 2026 Chem · Local save utility · Keep a backup of your original save file before transferring Pokémon.</footer>
+    <footer><span class="footer-name">CHEMS PC <span aria-hidden="true">✦</span> LOCAL SAVE UTILITY</span><span>Keep a backup of your original save before transferring Pokémon.</span><span class="footer-credit">© 2026 Chem · Original interface artwork</span></footer>
   </main>
 </body>
 </html>

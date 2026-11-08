@@ -2,14 +2,23 @@
 {% block title %}Chems PC · Pokémon Storage{% endblock %}
 {% block content %}
 <section class="hero">
-  <div class="eyebrow">YOUR CROSS-GENERATION POKÉ PC</div>
-  <h1>Move Pokémon safely.<br><span>On your terms.</span></h1>
+  <div class="hero-copy">
+  <div class="eyebrow"><span class="tiny-square" aria-hidden="true"></span> THE NEXT CHAPTER OF YOUR ADVENTURE</div>
+  <h1>Old friends.<br><span>New adventures.</span></h1>
   <p>Review a supported Generation I–VII save, choose exactly which Pokémon to import or export, then finalize the database changes and create a new save copy.</p>
   <div class="hero-stats">
     <div><strong>{{ active|length }}</strong><span>Active in database</span></div>
     <div><strong>{{ inactive_count }}</strong><span>In inactive history</span></div>
   </div>
+  </div>
+  <div class="terminal-art" aria-hidden="true">
+    <div class="art-caption">PERSONAL STORAGE TERMINAL <span>01</span></div>
+    <div class="computer"><div class="computer-top"><span></span><i></i><i></i></div><div class="monitor"><div class="screen"><div class="screen-label">STORAGE SYSTEM <span>●</span></div><div class="screen-boxes">{% for n in range(12) %}<span class="storage-slot{% if n in [0, 2, 5, 7, 8] %} occupied{% endif %}"></span>{% endfor %}</div><div class="screen-bottom">BOX 01 <span>‹ &nbsp; ›</span></div></div></div><div class="computer-controls"><span class="power-light"></span><span class="vent"></span><span class="drive"></span></div></div>
+    <div class="computer-base"></div><div class="art-note"><span>↔</span> GOOD COMPANY. EVERY GENERATION.</div>
+  </div>
 </section>
+
+<nav class="workflow" aria-label="Transfer steps"><span class="workflow-current" aria-current="step"><b>01</b> Open a save</span><span class="workflow-line" aria-hidden="true"></span><span><b>02</b> Choose Pokémon</span><span class="workflow-line" aria-hidden="true"></span><span><b>03</b> Transfer &amp; save</span></nav>
 
 <section class="panel upload-panel">
   <div class="panel-heading"><div><div class="eyebrow">STEP 01</div><h2>Open a save file</h2></div><span class="step-number">01</span></div>
@@ -39,7 +48,7 @@
   <div class="table-wrap"><table><thead><tr><th>Pokémon</th><th>Species ID</th><th>Gen</th><th>Held item / Gen I catch rate</th><th>Moves</th></tr></thead><tbody>
   {% for p in active %}<tr><td><strong>{{ p.name or 'Unnamed' }}</strong><small class="subline">UID {{ p.uid }} · Lv. {{ p.level if p.level is not none else 'stored' }}</small></td><td>#{{ p.species }}</td><td><span class="tag">{{ p.generation }}</span></td><td>{{ p.held_item }}</td><td class="move-cell">{{ [p.move1, p.move2, p.move3, p.move4]|select('ne', 0)|join(', ') or '—' }}</td></tr>{% endfor %}
   </tbody></table></div>
-  {% else %}<div class="empty-state"><div class="empty-icon">◌</div><strong>Your storage is empty</strong><p>Open a save file and import some Pokémon to begin.</p></div>{% endif %}
+  {% else %}<div class="empty-state"><div class="empty-icon" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div><strong>A little room for your next adventure.</strong><p>Your storage is empty. Open a save file to bring your Pokémon here.</p></div>{% endif %}
 </section>
 <div class="scope-note"><strong>Support scope:</strong> English Generation I–V save layouts plus decrypted PKHeX-compatible Generation VI/VII 3DS main saves. The selected title controls the save layout and known species/item ID caps. Exports stay within the same generation and use retained native records where required; full title-specific item catalogs and species-specific move legality are not verified.</div>
 {% endblock %}
