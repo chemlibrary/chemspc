@@ -18,11 +18,55 @@ ChemsPC is intended for personal, local use. It is not a save editor for arbitra
 
 ## Requirements
 
-- Python **3.10 or newer**.
-- Dependencies from `requirements.txt` (currently Flask 3.x).
+- **Docker with Docker Compose** for the container setup below; Python and Flask are included in the image.
+- Alternatively, Python **3.10 or newer** and dependencies from `requirements.txt` (currently Flask 3.x) for a native installation.
 - A supported raw save file. ROM files are not accepted.
 
+## Run with Docker (recommended)
+
+From the repository root, run:
+
+```bash
+docker compose up --build -d
+```
+
+Open <http://127.0.0.1:5000>. The first run builds the image and installs its dependencies inside the container. The server runs as an unprivileged user using Gunicorn and is published only on your computer's loopback interface.
+
+```bash
+docker compose logs -f    # View server logs; Ctrl+C exits the log viewer
+docker compose down       # Stop and remove the container; keep your data
+docker compose up -d      # Start it again
+```
+
+The named volume `chemspc-data` stores the SQLite database, staged uploads, generated downloads, and a generated session secret. Data and browser sessions survive container recreation. Do not use `docker compose down -v` unless you intend to delete this data. Keep original saves and independent backups outside the container.
+
+If port 5000 is already in use, create a `.env` file in the repository root with `CHEMSPC_PORT=5001`, then run the same Compose command and open <http://127.0.0.1:5001>.
+
+### Docker without Compose
+
+```bash
+docker build -t chemspc .
+docker run -d --name chemspc --restart unless-stopped -p 127.0.0.1:5000:5000 -v chemspc-data:/data chemspc
+```
+
+Stop and start that container using `docker stop chemspc` and `docker start chemspc`. Use either this setup or Compose to manage a collection; do not run multiple containers against the same data volume.
+
+### Use an existing collection
+
+Container startup creates an empty collection; your local `chemspc.db` and `instance/` are excluded from the build. To copy an existing collection into the Compose volume, stop any native server and back up your database first. Start Compose once to create the container and volume, then run:
+
+```bash
+docker compose stop
+docker compose cp ./chemspc.db chemspc:/data/chemspc.db
+docker compose run --rm --no-deps --user root --entrypoint chown chemspc -R 10001:10001 /data
+docker compose up -d
+```
+
+This replaces the container's collection, so use it only for an initial migration or an intentional restore. Finish any active native transfers before migrating; open a save again in the container to start a new transfer.
+
 ## Installation and start-up
+
+For a native installation without Docker:
 
 Run these commands from the repository root.
 
@@ -130,7 +174,7 @@ ChemsPC uses SQLite; no external database server is required. By default the dat
 
 The app initializes the tables at startup and adds the `record_payload` column to existing active/inactive tables if it is missing. Back up your database before upgrading. Older records without retained native data remain in the database, but they may fail export compatibility checks for formats that need an original binary record.
 
-Staged uploads and generated output files are stored under Flask's `instance/` directory, in `instance/staging/` and `instance/exports/`. Keep this directory private and remove stale files when they are no longer needed; generated exports are not your only backup.
+Staged uploads and generated output files are stored under Flask's `instance/` directory, in `instance/staging/` and `instance/exports/`. Set `CHEMSPC_INSTANCE_PATH` to an absolute path to relocate this directory. In Docker, the database is `/data/chemspc.db` and the instance directory is `/data/instance`, both in the persistent volume. Keep this directory private and remove stale files when they are no longer needed; generated exports are not your only backup.
 
 ## Tests
 

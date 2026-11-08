@@ -26,7 +26,10 @@ from save_formats import (
     trim_save_file,
 )
 
-app = Flask(__name__, instance_relative_config=True)
+app = Flask(
+    __name__, instance_relative_config=True,
+    instance_path=os.environ.get("CHEMSPC_INSTANCE_PATH"),
+)
 app.secret_key = os.environ.get("CHEMSPC_SECRET_KEY") or secrets.token_hex(32)
 # Permit moderate emulator-added trailers; staged files are normalized to the
 # selected game's known raw-save size before any parser sees them.

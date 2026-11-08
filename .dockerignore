@@ -1,0 +1,14 @@
+# Only application sources and build inputs belong in the image.
+# Excludes local databases, save files, credentials, caches, and Git history.
+**
+!Dockerfile
+!requirements.txt
+!requirements-docker.txt
+!*.py
+!templates/
+!templates/**
+!static/
+!static/**
+!docker/
+!docker/entrypoint.py
+!LICENSE
