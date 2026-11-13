@@ -23,7 +23,7 @@
 <section class="panel upload-panel">
   <div class="panel-heading"><div><div class="eyebrow">STEP 01</div><h2>Open a save file</h2></div><span class="step-number">01</span></div>
   <p class="muted">Choose the exact game/version before uploading. The native handler validates the save structure; your uploaded original stays unchanged, and finalization produces a separate file to download.</p>
-  <form action="{{ url_for('open_save_route') }}" method="post" enctype="multipart/form-data" class="upload-form generation-upload-form">
+  <form action="{{ url_for('open_save_route') }}" method="post" enctype="multipart/form-data" class="generation-upload-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="game-field">
       <label class="field-label" for="game-select">Game / save format</label>
@@ -45,10 +45,10 @@
 <section class="panel db-panel">
   <div class="panel-heading"><div><div class="eyebrow">YOUR COLLECTION</div><h2>Active database Pokémon</h2></div><span class="count-pill">{{ active|length }} Pokémon</span></div>
   {% if active %}
-  <div class="table-wrap"><table><thead><tr><th>Pokémon</th><th>Species ID</th><th>Gen</th><th>Held item / Gen I catch rate</th><th>Moves</th></tr></thead><tbody>
+  <div class="table-wrap"><table><thead><tr><th>Pokémon</th><th>Species ID</th><th>Gen</th><th>Held item</th><th>Moves</th></tr></thead><tbody>
   {% for p in active %}<tr><td><strong>{{ p.name or 'Unnamed' }}</strong><small class="subline">UID {{ p.uid }} · Lv. {{ p.level if p.level is not none else 'stored' }}</small></td><td>#{{ p.species }}</td><td><span class="tag">{{ p.generation }}</span></td><td>{{ p.held_item|item_name(p.generation) }}</td><td class="move-cell">{{ [p.move1, p.move2, p.move3, p.move4]|move_names(p.generation)|join(', ') or '—' }}</td></tr>{% endfor %}
   </tbody></table></div>
   {% else %}<div class="empty-state"><div class="empty-icon" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div><strong>A little room for your next adventure.</strong><p>Your storage is empty. Open a save file to bring your Pokémon here.</p></div>{% endif %}
 </section>
-<div class="scope-note"><strong>Support scope:</strong> English Generation I–V save layouts plus decrypted PKHeX-compatible Generation VI/VII 3DS main saves. The selected title controls the save layout and known species/item ID caps. Exports stay within the same generation and use retained native records where required; full title-specific item catalogs and species-specific move legality are not verified.</div>
+<div class="scope-note"><strong>Supported saves:</strong> English Generation I–V saves and decrypted Generation VI/VII 3DS main saves. Transfers stay within the same generation. See the game selector for the required save format.</div>
 {% endblock %}

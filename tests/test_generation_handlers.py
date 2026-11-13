@@ -7,7 +7,7 @@ import pytest
 
 from gen1 import Gen1_Save, _checksum as gen1_checksum, decode_gen1_text
 from gen2 import Crystal_Save, Gen2_Save
-from gen3 import Gen3_Save
+from gen3 import Gen3_Save, _decode_gen3_record, _serialize_gen3_record
 from gen4 import Gen4_Save
 from gen5 import Gen5_Save
 from gen6 import Gen6_Save
@@ -110,3 +110,46 @@ def test_registry_routes_each_game_to_its_native_handler(game, tmp_path, monkeyp
 def test_gen1_rejects_missing_file(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         Gen1_Save(path=tmp_path / "missing.sav", game="red")
+
+
+def test_gen1_catch_rate_is_preserved_without_displaying_it_as_an_item():
+    from pokemon_names import item_name
+    import db
+
+    raw = bytearray(33)
+    raw[0] = 0x54  # Pikachu's native Gen I species index.
+    raw[3] = 7
+    raw[7] = 45  # Catch rate, not an item ID.
+    names = b'\x50' * 11
+    handler = object.__new__(Gen1_Save)
+    pokemon = handler._parse_pokemon(bytes(raw), names, names, party=False)
+    restored = db.restore_record_payload(type(pokemon)(), db.encode_record_payload(pokemon))
+    assert item_name(restored.held_item, 1) == 'None'
+    assert restored.held_item == 45
+    assert restored._gen1_box_record == bytes(raw)
+    # The serializer retains the same record inside the box container.
+    assert handler._serialize_box([restored])[22:55] == bytes(raw)
+
+
+@pytest.mark.parametrize(('species', 'supported'), [
+    (0, False), (251, True), (252, False), (276, False),
+    (277, True), (386, True), (387, True), (411, True), (412, False),
+])
+@pytest.mark.parametrize('game', ['ruby', 'sapphire', 'emerald', 'firered', 'leafgreen'])
+def test_gen3_export_validation_uses_native_species_ids(species, supported, game):
+    from main import compatibility_issues
+
+    # PID/OT=0 uses ABCD substructure ordering with XOR key 0.
+    raw = bytearray(80)
+    raw[0x13] = 2
+    raw[32:34] = species.to_bytes(2, 'little')
+    raw[28:30] = species.to_bytes(2, 'little')  # Pokémon checksum.
+    pokemon = _decode_gen3_record(bytes(raw), party_record=False)
+    if species == 0:
+        # Empty native records are not Pokémon; exercise invalid legacy DB rows.
+        from pokemon import Pokemon
+        pokemon = Pokemon(generation=3, species=species)
+    issues = compatibility_issues(pokemon, game)
+    assert (not issues) == supported
+    if supported:
+        assert _serialize_gen3_record(pokemon, party_record=False) == bytes(raw)

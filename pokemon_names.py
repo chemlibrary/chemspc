@@ -1,6 +1,8 @@
 """Offline English display labels; native IDs remain unchanged for save export."""
 from pathlib import Path
 
+from generation_data import GENERATION_LIMITS
+
 
 _DATA = Path(__file__).resolve().parent / 'data' / 'pokemon_names'
 
@@ -21,8 +23,6 @@ _ITEM_TABLES = {
     6: _ITEMS,
     7: _ITEMS,
 }
-_MOVE_LIMITS = {1: 165, 2: 251, 3: 354, 4: 467, 5: 559, 6: 621, 7: 728}
-_ITEM_LIMITS = {2: 249, 3: 376, 4: 536, 5: 638, 6: 775, 7: 959}
 
 
 def _lookup(names: tuple[str, ...], value: int, limit: int, kind: str) -> str:
@@ -36,7 +36,7 @@ def _lookup(names: tuple[str, ...], value: int, limit: int, kind: str) -> str:
 def move_name(move_id: int, generation: int) -> str:
     if move_id == 0:
         return 'None'
-    return _lookup(_MOVES, move_id, _MOVE_LIMITS.get(generation, -1), 'move')
+    return _lookup(_MOVES, move_id, GENERATION_LIMITS.get(generation, {}).get('move', -1), 'move')
 
 
 def move_names(move_ids, generation: int) -> list[str]:
@@ -46,9 +46,10 @@ def move_names(move_ids, generation: int) -> list[str]:
 
 def item_name(item_id: int, generation: int) -> str:
     if generation == 1:
-        # This byte is a catch rate in Gen I, not an item ID.
-        return f'No held item (Gen I catch rate: {item_id})'
+        # The stored byte is a catch rate, not a held item. Preserve it in the
+        # native record without exposing it in the held-item display.
+        return 'None'
     if item_id == 0:
         return 'None'
     return _lookup(_ITEM_TABLES.get(generation, ()), item_id,
-                   _ITEM_LIMITS.get(generation, -1), 'item')
+                   GENERATION_LIMITS.get(generation, {}).get('item', -1), 'item')

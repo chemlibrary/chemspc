@@ -7,7 +7,7 @@ ChemsPC is intended for personal, local use. It is not a save editor for arbitra
 ## Features
 
 - A Flask website for reviewing Pokémon in a save file and in the active database.
-- English move and held-item names across Generations I–VII in collection and transfer views, using bundled offline tables. Generation I shows its catch-rate byte separately because held items did not exist yet; empty items show “None” and unrecognized IDs have an explicit fallback label.
+- English move and held-item names across Generations I–VII in collection and transfer views, using bundled offline tables. Generation I and empty held-item slots show “None”; unrecognized IDs have an explicit fallback label.
 - Selective imports from the source save's party and PC boxes.
 - Selective exports from the database into an available PC box slot in the selected save.
 - An explicit **Finalize** step. Selections are staged until finalization.
@@ -90,7 +90,7 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-Open <http://127.0.0.1:5000> in your browser. `main.py` now starts the Flask website; the previous command-line extraction workflow is not the primary interface.
+Open <http://127.0.0.1:5000> in your browser. `main.py` starts the Flask website.
 
 The app listens on `127.0.0.1` by default. You may set `CHEMSPC_PORT` to change the port. `CHEMSPC_HOST` can change the bind address, but do not expose ChemsPC to an untrusted network: the app is designed for local use and does not implement user accounts or authentication. `CHEMSPC_SECRET_KEY` can be set to provide a stable Flask session secret.
 
@@ -160,6 +160,7 @@ The selected title determines the expected raw file size. If an upload is larger
 - Pokémon are exported into PC storage only. ChemsPC does not calculate or invent party stats for a boxed record.
 - The app validates supported species, move, and held-item ID ranges and required native record data. This is a format-compatibility check, **not** a complete legality analysis. Species-specific learnsets, every title-specific item restriction, encounter legality, and all other competitive/legal constraints are not exhaustively checked.
 - Generation I uses an internal species index that differs from the National Pokédex number. Its `held_item`-like field is actually the catch-rate byte, not a held item.
+- Generation III retains native species IDs (1–251 and 277–411), rather than National Pokédex numbering. Export validation uses these native ranges and rejects unused placeholders (252–276).
 - Generation II records can be written from the shared stored fields after range and text checks. Other generations generally require retained native binary Pokémon record data to preserve the format safely.
 - Existing database rows created before native record payloads were saved may not be exportable to Generations I or III–VII. Re-import those Pokémon from a supported save using the current version to capture their native record payload. Cross-generation conversions remain unavailable even when a row has a native payload.
 - Pokémon format details differ by generation. Fields that do not exist in a given generation may be empty, and some shared database fields have generation-specific meanings.
@@ -203,8 +204,10 @@ Set `CHEMSPC_PLATINUM_FIXTURE` to the absolute path of the Platinum save used fo
 |---|---|
 | `main.py` | Flask app, upload/review/finalize/download routes, and compatibility checks |
 | `save_formats.py` | Game registry, expected save sizes, upload trimming, and shared native-handler adapters |
-| `gen1.py`–`gen7.py` | Existing generation-specific save readers and writers; keep these files when applying an update |
-| `gen2.py` | Generation II Gold/Silver and Crystal save support and record serialization |
+| `gen1.py`–`gen7.py` | Generation-specific save readers and writers, including Gold/Silver and Crystal layouts in `gen2.py` |
+| `generation_data.py` | Shared generation and title ID bounds for validation, display, and level calculation |
+| `save_io.py` | Shared atomic binary writer for all generation handlers |
+| `pokemon_names.py`, `data/pokemon_names/` | Offline English move and held-item labels and source attribution |
 | `pokemon.py` | Shared Pokémon data model |
 | `db.py` | SQLite persistence, native-record payload storage, and active/inactive table operations |
 | `templates/` | Flask HTML templates |

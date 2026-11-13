@@ -93,9 +93,9 @@ def init_tables() -> bool:
     try:
         conn.execute(_ACTIVE_SCHEMA)
         conn.execute(_INACTIVE_SCHEMA)
-        # Upgrade databases created by the previous Flask update. Existing rows
-        # remain valid but cannot be exported to formats requiring raw records;
-        # they have no payload and will be marked incompatible in the UI.
+        # Retain schema migration for collections created without native payloads.
+        # Those rows can still be listed, but exports requiring the original
+        # record are marked incompatible until the Pokémon is imported again.
         _ensure_payload_column(conn, "pokemon")
         _ensure_payload_column(conn, "inactive_pokemon")
         conn.commit()

@@ -25,7 +25,7 @@
         <span class="card-position">{{ entry.position }}</span>
         <span class="card-title">{{ p.name or 'Unnamed' }}</span>
         <span class="card-meta">Species #{{ p.species }} <i>·</i> Lv. {{ p.level }}</span>
-        <span class="card-details">Item {{ p.held_item|item_name(p.generation) }} <i>·</i> Moves {{ [p.move1, p.move2, p.move3, p.move4]|move_names(p.generation)|join(', ') or '—' }}</span>
+        <span class="card-details">Held item: {{ p.held_item|item_name(p.generation) }} <i>·</i> Moves: {{ [p.move1, p.move2, p.move3, p.move4]|move_names(p.generation)|join(', ') or '—' }}</span>
         <span class="card-action">Select to import</span>
       </label>
       {% endfor %}
@@ -35,13 +35,13 @@
 
   <section class="panel">
     <div class="panel-heading"><div><div class="eyebrow">EXPORT TO SAVE</div><h2>Pokémon in your database</h2></div><span class="count-pill">{{ export_candidates|length }} active</span></div>
-    <p class="muted compact">Select compatible Pokémon to place into an available PC storage slot. Exports must match the target generation; generations with encrypted/native records also require the retained record payload. Exported rows move to the inactive Pokémon table when finalized.</p>
+    <p class="muted compact">Select compatible Pokémon to place into an available PC box slot. Transfers must stay within the same generation. Exported Pokémon leave your active collection and remain in transfer history.</p>
     {% if export_candidates %}
     <div class="selection-toolbar" data-selection-group="export_uid" hidden>
       <label class="select-all"><input type="checkbox" data-select-all> Select all compatible to export</label>
       <output class="selection-count" aria-live="polite"></output>
     </div>
-    <div class="table-wrap"><table class="select-table"><thead><tr><th class="check-col"></th><th>Pokémon</th><th>Species</th><th>Item</th><th>Moves</th><th>Compatibility</th></tr></thead><tbody>
+    <div class="table-wrap"><table class="select-table"><thead><tr><th class="check-col"></th><th>Pokémon</th><th>Species</th><th>Held item</th><th>Moves</th><th>Compatibility</th></tr></thead><tbody>
       {% for item in export_candidates %}{% set p = item.pokemon %}
       <tr class="{% if item.issues %}row-disabled{% endif %}">
         <td class="check-col"><input type="checkbox" name="export_uid" value="{{ item.row.uid }}" aria-label="Export {{ p.name or 'Pokémon' }}" {% if item.issues %}disabled{% endif %}></td>
@@ -56,9 +56,9 @@
 
   <section class="finalize-bar">
     <div><span class="finalize-title">Ready to make it official?</span><span class="finalize-copy">Only your selected Pokémon will move. A new save file will be generated.</span></div>
-    <div class="finalize-actions"><button class="button button-quiet" type="submit" formaction="{{ url_for('cancel') }}" formmethod="post" formnovalidate>Cancel</button><button class="button button-primary" type="submit" id="finalize-button">Finalize transfer <span>→</span></button></div>
+    <div class="finalize-actions"><button class="button button-quiet" type="submit" formaction="{{ url_for('cancel') }}" formmethod="post" formnovalidate>Cancel</button><button class="button button-primary" type="submit">Finalize transfer <span>→</span></button></div>
   </section>
 </form>
-<div class="scope-note"><strong>Compatibility check:</strong> exports are same-generation only and validate species, item, and move ID ranges. Generations I and III–VII require retained native record data so encrypted/name/origin bytes are not invented; legacy rows without those records must be imported again. These checks do not prove species-specific move legality. Pokémon are placed into PC storage rather than having party stats guessed.</div>
+<div class="scope-note"><strong>Compatibility:</strong> Pokémon with missing original save data must be imported again before export. These checks verify supported record formats, not full Pokémon legality. Exports go to PC boxes.</div>
 <script src="{{ url_for('static', filename='transfer-selection.js') }}" defer></script>
 {% endblock %}

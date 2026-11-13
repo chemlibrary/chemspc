@@ -10,7 +10,7 @@ from pokemon_names import item_name, move_name, move_names
 
 
 @pytest.mark.parametrize(('generation', 'item_id', 'expected'), [
-    (1, 45, 'No held item (Gen I catch rate: 45)'),
+    (1, 45, 'None'),
     (2, 146, 'Leftovers'),
     (3, 200, 'Leftovers'),
     (4, 234, 'Leftovers'),
@@ -63,6 +63,8 @@ def test_all_display_locations_use_names_without_changing_ids(generation, monkey
     label = item_name(item_id, generation)
     assert label in collection
     assert 'Tackle, Thunderbolt' in collection
+    assert '<th>Held item</th>' in collection
+    assert 'catch rate' not in collection.lower()
 
     with main.app.test_request_context('/'):
         review = render_template(
@@ -74,6 +76,7 @@ def test_all_display_locations_use_names_without_changing_ids(generation, monkey
     # generation, even when reviewing a save from a different generation.
     assert review.count(label) == 2
     assert review.count('Tackle, Thunderbolt') == 2
+    assert 'catch rate' not in review.lower()
     assert asdict(pokemon) == before
     assert row['held_item'] == item_id
     assert row['move1'] == 33

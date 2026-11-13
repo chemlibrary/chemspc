@@ -101,8 +101,14 @@ class BoxLevelTests(unittest.TestCase):
 
     def test_gen7_species_beyond_gen6_limit(self):
         # Zeraora (807), Slow growth. Must be recalculated after the shared PK6 parser.
-        mon = gen7._parse_pokemon(boxed_record(7, 807, 1250000), game_name='ultrasun', party=False)
+        raw = boxed_record(7, 807, 1250000)
+        mon = gen7._parse_pokemon(raw, game_name='ultrasun', party=False)
         self.assertEqual(mon.level, 100)
+        self.assertEqual(mon.gen7_record, raw)
+        self.assertFalse(any(key.startswith('gen6_') for key in vars(mon)))
+        restored = db.restore_record_payload(Pokemon(), db.encode_record_payload(mon))
+        self.assertEqual(restored.gen7_record, raw)
+        self.assertEqual(restored.generation, 7)
 
     def test_older_database_levels_are_derived_without_changing_rows(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(db, 'DATABASE_NAME', str(Path(folder) / 'test.db')):

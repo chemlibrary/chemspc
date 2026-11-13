@@ -12,9 +12,9 @@ exported/imported by a save manager that handles those integrity layers.
 
 The handler validates the footer marker and the checksums for the party and PC
 box blocks, decrypts PK6 records for SQLite parsing, and preserves original
-record bytes when Pokémon remain in their original locations. The extraction
-workflow uses it to clear party and PC records only after the SQLite transaction
-has committed.
+record bytes during transfers. The save adapter registers exported database
+records in vacant PC slots; the writer preserves their bytes and updates the
+checksums before the application publishes the output and commits SQLite.
 
 Format references:
   https://projectpokemon.org/docs/gen-6/xy-save-structure-r82/
@@ -30,19 +30,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-try:
-    from chempy.files import bytes_safe_write
-except ModuleNotFoundError:
-    def bytes_safe_write(*, path: str | os.PathLike[str], contents: bytes | bytearray) -> None:
-        """Atomically write bytes when the optional project helper is absent."""
-        destination = Path(path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary = destination.with_name(destination.name + ".tmp")
-        with open(temporary, "wb") as handle:
-            handle.write(contents)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, destination)
+from save_io import bytes_safe_write
 
 from gen4 import crc16_ccitt
 from pokemon import Pokemon
@@ -91,10 +79,6 @@ BLOCK_POSITION = (
     (2, 1, 3, 0), (3, 1, 2, 0), (2, 3, 1, 0), (3, 2, 1, 0),
     (0, 1, 2, 3), (0, 1, 3, 2), (0, 2, 1, 3), (0, 3, 1, 2),
     (0, 2, 3, 1), (0, 3, 2, 1), (1, 0, 2, 3), (1, 0, 3, 2),
-)
-BLOCK_POSITION_INVERT = (
-    0, 1, 2, 4, 3, 5, 6, 7, 12, 18, 13, 19, 8, 10, 14, 20,
-    16, 22, 9, 11, 15, 21, 17, 23, 0, 1, 2, 4, 3, 5, 6, 7,
 )
 
 
@@ -301,12 +285,12 @@ def _parse_pokemon(
 
 
 class Gen6_Save:
-    """Read and clear party/PC records from decrypted Gen VI saves.
+    """Read and write party/PC records in decrypted Gen VI saves.
 
-    ``game`` is required to distinguish X/Y and Omega Ruby/Alpha Sapphire,
-    which share their family save layout. This class intentionally supports
-    extraction/clearing of existing Pokémon records, not constructing new PK6s
-    from high-level fields or re-encoding edited Pokémon attributes.
+    ``game`` selects X/Y or Omega Ruby/Alpha Sapphire,
+    which share their family save layout. Exports must be registered in vacant
+    PC slots by the save adapter. The writer uses retained PK6 bytes rather
+    than constructing records or re-encoding edited high-level fields.
     """
     generation = 6
 
@@ -449,16 +433,6 @@ class Gen6_Save:
             all_boxes.append(box)
         self.box_pokemon = all_boxes
 
-    def print_all_pokemon(self) -> None:
-        for index, pokemon in enumerate(self.party_pokemon, 1):
-            print(f"Party {index}: {pokemon.name} (species {pokemon.species})")
-        for box_index, box in enumerate(self.box_pokemon, 1):
-            for pokemon in box:
-                print(
-                    f"Box {box_index}, slot {getattr(pokemon, 'gen6_box_slot', -1) + 1}: "
-                    f"{pokemon.name} (species {pokemon.species})"
-                )
-
     def _write_block_checksum(self, output: bytearray, block_id: int,
                               start: int, length: int) -> None:
         entry = self._block_entry_offset(self.metadata_offset, block_id)
@@ -477,7 +451,7 @@ class Gen6_Save:
 
         # Compact retained party records in list order. The record bytes are
         # retained verbatim; creating/editing PK6 attributes is intentionally
-        # outside this extraction/clearing writer.
+        # outside this record-preserving writer.
         original_party_set = set(self._original_party_records)
         party_records: list[bytes] = []
         for pokemon in self.party_pokemon:
@@ -549,6 +523,3 @@ class Gen6_Save:
         output_path = f"{self.path}.new"
         bytes_safe_write(path=output_path, contents=output)
         return output_path
-
-
-Generation6Save = Gen6_Save

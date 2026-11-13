@@ -5,9 +5,9 @@ Generation I saves are 32 KiB SRAM dumps. Larger dumps are accepted, but only
  layout. The module reads the live Current Box copy in bank 1, reads the other
  boxes from their SRAM banks, and updates all relevant checksums when writing.
 
-Writing is intended for extraction/clearing existing Pokémon. Retained records
-are preserved; new Pokémon cannot be synthesized from only the shared Pokemon
-model because the Gen I record contains additional version-specific bytes.
+Transfers preserve retained Pokémon records, including records imported from
+another Generation I save. New Pokémon cannot be synthesized from only the
+shared Pokemon model because the record contains additional native bytes.
 
 Format references:
     https://savedex.net/reference/gen-1-save-file-format
@@ -18,9 +18,9 @@ Format references:
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from pokemon import Pokemon
+from save_io import bytes_safe_write
 
 SAVE_SIZE = 0x8000
 MAIN_DATA_START = 0x2598
@@ -90,7 +90,6 @@ _GEN1_CHAR_MAP.update({
     0xE7: "!", 0xE8: ".", 0xEF: "♂", 0xF0: "¥", 0xF1: "×",
     0xF2: ".", 0xF3: "/", 0xF4: ",", 0xF5: "♀",
 })
-_GEN1_REVERSE_CHAR_MAP = {value: key for key, value in _GEN1_CHAR_MAP.items()}
 
 
 def decode_gen1_text(data: bytes) -> str:
@@ -113,12 +112,6 @@ def _decode_name_field(data: bytes) -> str:
 def _checksum(data: bytes | bytearray) -> int:
     """Generation I checksum: one's complement of the byte sum, modulo 256."""
     return (~sum(data)) & 0xFF
-
-
-def _empty_box() -> bytes:
-    box = bytearray(BOX_SIZE)
-    box[1:22] = b"\xFF" * 21
-    return bytes(box)
 
 
 def _field_bytes(pokemon: Pokemon, attribute: str, expected: int) -> bytes:
@@ -323,13 +316,6 @@ class Gen1_Save:
             boxes.append(self._parse_box_region(region, index))
         return boxes
 
-    def print_all_pokemon(self) -> None:
-        for pokemon in self.party_pokemon:
-            print(f"{pokemon.name} (#{pokemon.species}) - lvl {pokemon.level}")
-        for box_number, box in enumerate(self.box_pokemon, start=1):
-            for pokemon in box:
-                print(f"Box {box_number}: {pokemon.name} (#{pokemon.species}) - lvl {pokemon.level}")
-
     def _serialize_party(self, pokemon_list: list[Pokemon]) -> bytes:
         if len(pokemon_list) > PARTY_CAPACITY:
             raise ValueError("A Generation I party cannot contain more than 6 Pokémon")
@@ -427,12 +413,7 @@ class Gen1_Save:
             self.update_checksums()
 
         output_path = f"{self.path}.new"
-        temporary = f"{output_path}.tmp"
-        with open(temporary, "wb") as handle:
-            handle.write(self.save_bytes)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, output_path)
+        bytes_safe_write(path=output_path, contents=self.save_bytes)
 
         # Allow repeated writes from this instance without treating unchanged
         # Pokémon lists as edits on every subsequent call.

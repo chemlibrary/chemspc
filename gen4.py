@@ -3,9 +3,9 @@
 Supported layouts: Diamond, Pearl, Platinum, HeartGold, and SoulSilver.
 The module reads a raw 512 KiB Nintendo DS ``.sav`` file, validates Gen IV
 small/storage blocks and their CRC-16-CCITT checksums, extracts party and PC
-Pokémon, and writes a ``.new`` copy. In keeping with chemspc's extraction
-workflow, existing Pokémon records are preserved verbatim when retained; the
-application can clear records after committing them to SQLite.
+Pokémon, and writes a ``.new`` copy. Retained records are preserved verbatim;
+the transfer workflow removes selected records and adds retained database
+records to vacant PC slots before publishing the output and committing SQLite.
 
 Format references:
     https://bulbapedia.bulbagarden.net/wiki/Save_data_structure_(Generation_IV)
@@ -19,21 +19,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Iterable
 
-try:
-    from chempy.files import bytes_safe_write
-except ModuleNotFoundError:
-    def bytes_safe_write(*, path: str | os.PathLike[str], contents: bytes | bytearray) -> None:
-        """Small atomic file writer fallback for standalone/testing use."""
-        destination = Path(path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary = destination.with_name(destination.name + ".tmp")
-        with open(temporary, "wb") as handle:
-            handle.write(contents)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, destination)
+from save_io import bytes_safe_write
 
 from pokemon import Pokemon
 from gen4_growth import level_from_experience
@@ -333,9 +320,6 @@ class Gen4_Save:
         if path is not None:
             self.read_save()
 
-    def _block_at(self, start: int, size: int) -> bytes:
-        return bytes(self.save_bytes[start:start + size])
-
     def _scan_blocks(self, data: bytes | bytearray | None = None) -> tuple[list[dict], list[dict]]:
         blob = self.save_bytes if data is None else data
         general_blocks: list[dict] = []
@@ -425,15 +409,6 @@ class Gen4_Save:
             boxes.append(entries)
         self.box_pokemon = boxes
 
-    def print_all_pokemon(self) -> None:
-        print("Party Pokémon:")
-        for pokemon in self.party_pokemon:
-            print(f"  {pokemon.name or '(unnamed)'} (species {pokemon.species}, level {pokemon.level or 'stored'})")
-        for index, box in enumerate(self.box_pokemon, start=1):
-            print(f"Box {index}:")
-            for pokemon in box:
-                print(f"  {pokemon.name or '(unnamed)'} (species {pokemon.species}, level {pokemon.level or 'stored'})")
-
     def _make_output(self) -> bytearray:
         if len(self.save_bytes) != SAVE_SIZE:
             raise ValueError("No complete Generation IV save is loaded")
@@ -520,6 +495,3 @@ class Gen4_Save:
         output_path = f"{self.path}.new"
         bytes_safe_write(path=output_path, contents=output)
         return output_path
-
-
-Generation4Save = Gen4_Save

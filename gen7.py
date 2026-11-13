@@ -8,9 +8,9 @@ console-encrypted outer 3DS save container. SM saves are 0x6BE00 bytes and
 USUM saves are 0x6CC00 bytes. Generation VII PK7 data uses the same 232-byte
 stored and 260-byte party record sizes and record encryption as Generation VI.
 
-This module supports extracting and clearing existing party/PC Pokémon. It
-preserves retained Pokémon's original encrypted records and does not create
-new records or encode arbitrary edits to Pokémon fields.
+Transfers preserve original encrypted Pokémon records. Exported records are
+registered in vacant PC slots by the save adapter. The writer does not create
+records from high-level fields or encode arbitrary edits to those fields.
 
 Format references:
   https://github.com/kwsch/PKHeX/blob/master/PKHeX.Core/Saves/SAV7.cs
@@ -25,22 +25,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-try:
-    from chempy.files import bytes_safe_write
-except ModuleNotFoundError:
-    def bytes_safe_write(*, path: str | os.PathLike[str], contents: bytes | bytearray) -> None:
-        """Atomically write bytes when the optional project helper is absent."""
-        destination = Path(path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary = destination.with_name(destination.name + ".tmp")
-        with open(temporary, "wb") as handle:
-            handle.write(contents)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, destination)
+from save_io import bytes_safe_write
 
 from gen4 import crc16_ccitt
-from gen6 import _parse_pokemon as _parse_gen6_pokemon, decrypt_gen6_record
+from gen6 import _parse_pokemon as _parse_gen6_pokemon
 from pokemon import Pokemon
 from experience import level_from_experience
 
@@ -106,22 +94,6 @@ def _put_u32(data: bytearray, offset: int, value: int) -> None:
     data[offset:offset + 4] = (int(value) & 0xFFFFFFFF).to_bytes(4, "little")
 
 
-def decrypt_gen7_record(record: bytes) -> bytes:
-    """Decrypt and checksum-validate a Generation VII PK7 record.
-
-    PK7 has the same stored/party sizes and EC-seeded XOR/block-shuffle scheme
-    as PK6. Reuse the common implementation, but report Gen VII in any errors.
-    """
-    if len(record) not in (BOX_RECORD_SIZE, PARTY_RECORD_SIZE):
-        raise ValueError(
-            f"Expected a 232- or 260-byte Generation VII record, got {len(record)}"
-        )
-    try:
-        return decrypt_gen6_record(record)
-    except ValueError as exc:
-        raise ValueError(str(exc).replace("Generation VI", "Generation VII")) from exc
-
-
 def _parse_pokemon(
     record: bytes,
     *,
@@ -155,17 +127,19 @@ def _parse_pokemon(
     pokemon.gen7_party_slot = party_slot
     pokemon.gen7_box_index = box_index
     pokemon.gen7_box_slot = box_slot
-    # gen6_record and gen6 slot markers are retained only for compatibility
-    # with the shared parser; Gen7_Save only trusts the gen7_* attributes.
+    # The shared field parser also assigns Gen VI writer metadata. Only Gen VII
+    # metadata belongs in this Pokémon's retained database payload.
+    for attribute in ('gen6_record', 'gen6_party_slot', 'gen6_box_index', 'gen6_box_slot'):
+        delattr(pokemon, attribute)
     return pokemon
 
 
 class Gen7_Save:
-    """Read/write decrypted Pokémon Sun/Moon/USUM saves for extraction.
+    """Read/write decrypted Pokémon Sun/Moon/USUM saves for transfers.
 
     ``game`` must be one of ``sun``, ``moon``, ``ultrasun`` or ``ultramoon``.
-    Retained Pokémon records must stay in their original boxes/slots. Party
-    records may be compacted in list order, which supports removing party slots.
+    Existing PC records retain their slots; exports are registered in vacant
+    slots by the save adapter. Party records may be compacted in list order.
     """
     generation = 7
 
@@ -317,14 +291,6 @@ class Gen7_Save:
             all_boxes.append(box)
         self.box_pokemon = all_boxes
 
-    def print_all_pokemon(self) -> None:
-        for index, pokemon in enumerate(self.party_pokemon, 1):
-            print(f"Party {index}: {pokemon.name} (species {pokemon.species})")
-        for box_index, box in enumerate(self.box_pokemon, 1):
-            for pokemon in box:
-                slot = getattr(pokemon, "gen7_box_slot", -1)
-                print(f"Box {box_index}, slot {slot + 1}: {pokemon.name} (species {pokemon.species})")
-
     def _write_block_checksum(self, output: bytearray, block_id: int,
                               start: int, length: int) -> None:
         entry = self._block_entry_offset(self.metadata_offset, block_id)
@@ -416,6 +382,3 @@ class Gen7_Save:
         output_path = f"{self.path}.new"
         bytes_safe_write(path=output_path, contents=output)
         return output_path
-
-
-Generation7Save = Gen7_Save

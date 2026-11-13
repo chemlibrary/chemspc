@@ -14,10 +14,10 @@ from werkzeug.utils import secure_filename
 
 import db
 from pokemon import Pokemon
+from generation_data import GENERATION_LIMITS, TITLE_LIMITS
 from pokemon_names import item_name, move_names
 from save_formats import (
     GAME_SPECS,
-    box_record,
     choose_box_slot,
     get_game_spec,
     has_native_export_record,
@@ -43,31 +43,6 @@ app.config["EXPORT_FOLDER"] = str(Path(app.instance_path) / "exports")
 Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 Path(app.config["EXPORT_FOLDER"]).mkdir(parents=True, exist_ok=True)
-
-# Broad ID bounds are per-generation data-format limits, not species-specific
-# learnset/legalization checks. Exact game-specific item tables can vary.
-GENERATION_LIMITS = {
-    1: {"species": 151, "move": 165, "item": None},
-    2: {"species": 251, "move": 251, "item": 249},
-    3: {"species": 386, "move": 354, "item": 376},
-    4: {"species": 493, "move": 467, "item": 536},
-    5: {"species": 649, "move": 559, "item": 638},
-    6: {"species": 721, "move": 621, "item": 775},
-    7: {"species": 807, "move": 728, "item": 959},
-}
-# Narrow titles whose usable species/item index range differs within one
-# generation. These caps reject known newer-title IDs; they do not encode every
-# game-specific gap in an item's catalog.
-TITLE_LIMITS = {
-    "x": {"species": 721, "item": 717, "move": 617},
-    "y": {"species": 721, "item": 717, "move": 617},
-    "omegaruby": {"species": 721, "item": 775, "move": 621},
-    "alphasapphire": {"species": 721, "item": 775, "move": 621},
-    "sun": {"species": 802, "item": 920},
-    "moon": {"species": 802, "item": 920},
-    "ultrasun": {"species": 807, "item": 959},
-    "ultramoon": {"species": 807, "item": 959},
-}
 
 
 def _workflow_dir() -> Path | None:
@@ -125,13 +100,6 @@ def _as_int(value) -> int | None:
         return None
 
 
-def _pokemon_from_row(row: dict) -> Pokemon:
-    # row_to_pokemon restores the JSON/base64 native record payload as well as
-    # common fields. Legacy rows have no payload and remain importable but may
-    # not be exportable to record-preserving generations.
-    return db.row_to_pokemon(row)
-
-
 def compatibility_issues(pokemon: Pokemon, target_game: str) -> list[str]:
     """Check same-generation IDs and whether a native record can be written.
 
@@ -154,6 +122,8 @@ def compatibility_issues(pokemon: Pokemon, target_game: str) -> list[str]:
     species = _as_int(getattr(pokemon, "species", None))
     if species is None or not 1 <= species <= limits["species"]:
         issues.append(f"Species ID must be between 1 and {limits['species']} for {spec.label}.")
+    elif gen == 3 and 252 <= species <= 276:
+        issues.append('This Generation III species ID is an unused placeholder.')
 
     # In Gen I this byte is catch rate, not a held item. Do not misinterpret it
     # as an item ID; retained Gen I binary records preserve its original meaning.
@@ -193,14 +163,10 @@ def compatibility_issues(pokemon: Pokemon, target_game: str) -> list[str]:
             if value is None or not 0 <= value <= max_value:
                 issues.append(f"{field.replace('_', ' ')} is outside the Generation II save-file range.")
 
-    if not has_native_export_record(pokemon, gen):
-        if gen == 2:
-            # Gen II records are synthesized from the validated shared fields.
-            pass
-        else:
-            issues.append(
-                f"This row has no retained native Generation {gen} boxed record. Re-import it using this update before exporting it to a Generation {gen} save."
-            )
+    if gen != 2 and not has_native_export_record(pokemon, gen):
+        issues.append(
+            f"The original Generation {gen} record is missing. Import this Pokémon from a save again before exporting it."
+        )
     return list(dict.fromkeys(issues))
 
 
@@ -304,14 +270,11 @@ def manage():
     active = db.list_pokemon(active=True)
     export_candidates = []
     for row in active:
-        pokemon = _pokemon_from_row(row)
+        pokemon = db.row_to_pokemon(row)
         export_candidates.append({"row": row, "pokemon": pokemon, "issues": compatibility_issues(pokemon, game)})
     return render_template(
         "manage.html", source_entries=source_entries, export_candidates=export_candidates,
-        party_count=len(save.party_pokemon), box_count=sum(len(box) for box in save.box_pokemon),
-        party_limit=spec.party_capacity, box_limit=spec.box_capacity,
         display_name=_display_name(), game_label=spec.label, generation=spec.generation,
-        box_count_limit=spec.box_count, game_description=spec.description,
     )
 
 
@@ -413,7 +376,7 @@ def finalize():
         missing_uids = sorted(set(export_uids) - set(export_rows))
         if missing_uids:
             raise ValueError("One or more selected database Pokémon are no longer active. Reload and try again.")
-        export_pokemon = {uid: _pokemon_from_row(row) for uid, row in export_rows.items()}
+        export_pokemon = {uid: db.row_to_pokemon(row) for uid, row in export_rows.items()}
         incompatibilities = {
             uid: compatibility_issues(pokemon, game)
             for uid, pokemon in export_pokemon.items()

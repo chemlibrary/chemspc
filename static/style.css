@@ -4,10 +4,8 @@
   --muted: #52676b;
   --paper: #f5f4e9;
   --panel: #fffef6;
-  --line: #b8c9bd;
   --green: #285f50;
   --green-dark: #174b3e;
-  --green-light: #e0edda;
   --red: #b33f38;
   --red-light: #fff0e8;
   --gold: #f2cc64;
@@ -109,7 +107,7 @@ tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: #f0f4e6; }
 td small.subline { display: block; color: var(--muted); font: 10px/1.6 var(--mono); margin-top: 4px; }
 .tag { display: inline-block; background: #e3ecdb; padding: 4px 7px; border-color: #9cad95; }
-.move-cell { font: 11px var(--mono); white-space: nowrap; }
+.move-cell { font: 11px/1.6 var(--mono); min-width: 12rem; overflow-wrap: anywhere; }
 .empty-state { text-align: center; padding: 30px 16px; background-color: #eff3e5; background-image: linear-gradient(#7f9f7212 1px, transparent 1px), linear-gradient(90deg, #7f9f7212 1px, transparent 1px); background-size: 24px 24px; border: 1px solid #c6d3bc; border-radius: 2px; }
 .empty-icon { display: grid; grid-template-columns: repeat(3, 16px); gap: 4px; justify-content: center; margin-bottom: 16px; }
 .empty-icon span { height: 14px; border: 2px solid #8da17d; background: #dce6cb; }
@@ -165,6 +163,7 @@ td small.subline { display: block; color: var(--muted); font: 10px/1.6 var(--mon
 .alert { padding: 13px 16px; border: 2px solid; border-radius: 3px; font-size: 12px; margin-bottom: 10px; }
 .alert-error { background: var(--red-light); border-color: var(--red); color: #8c302b; }
 .alert-success { background: #e4efdc; border-color: var(--green); color: var(--green-dark); }
+.alert-info { background: #e7eedf; border-color: #7b9487; color: var(--ink); }
 .result-panel { text-align: center; max-width: 660px; margin: 60px auto; padding: 40px 36px; border-top: 7px solid var(--green); }
 .result-mark { height: 57px; width: 57px; border: 2px solid var(--ink); border-radius: 3px; display: grid; place-items: center; background: var(--gold); font: bold 30px var(--mono); margin: 0 auto 22px; box-shadow: 3px 3px 0 var(--ink); }
 .result-panel h1 { font-size: 48px; margin: 10px 0 16px; }

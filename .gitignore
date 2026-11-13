@@ -1,12 +1,12 @@
-**/media/*
-**/db.sqlite3
 **/__pycache__
-**/migrations
 **/.pytest_cache
 **/build
 **/.venv
-*.lock
+*.py[cod]
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 # Local uploaded saves and generated transfer files must not be committed.
 instance/
 .env

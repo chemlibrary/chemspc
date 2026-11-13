@@ -5,10 +5,10 @@
   <div class="result-mark">✓</div>
   <div class="eyebrow">TRANSFER FINALIZED</div>
   <h1>All set.</h1>
-  <p class="muted">Your selected database changes were committed and a modified save file is ready. The original uploaded save remains unchanged.</p>
+  <p class="muted">Your transfer is complete and a modified save file is ready. Your original save file remains unchanged.</p>
   <div class="result-stats">
-    <div><strong>{{ imported }}</strong><span>Imported to active database</span></div>
-    <div><strong>{{ exported }}</strong><span>Moved to inactive database</span></div>
+    <div><strong>{{ imported }}</strong><span>Imported to collection</span></div>
+    <div><strong>{{ exported }}</strong><span>Exported to save</span></div>
   </div>
   <a class="button button-primary download-button" href="{{ url_for('download', token=token) }}">Download modified save <span>↓</span></a>
   <div class="safety-note"><span>!</span><span>Keep the downloaded file as a backup and verify it in your emulator before replacing any original save.</span></div>

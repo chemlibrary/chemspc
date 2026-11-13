@@ -11,6 +11,8 @@ Only growth-rate numbers are bundled; no runtime downloads are needed.
 """
 from bisect import bisect_right
 
+from generation_data import GENERATION_LIMITS
+
 # The same six experience curves apply across all supported generations.
 from gen4_growth import EXPERIENCE_TABLES
 
@@ -47,7 +49,7 @@ GEN3_GROWTH_RATES = (
 )
 
 
-SPECIES_LIMITS = {1: 151, 2: 251, 3: 411, 4: 493, 5: 649, 6: 721, 7: 807}
+SPECIES_LIMITS = {generation: limits['species'] for generation, limits in GENERATION_LIMITS.items()}
 
 
 def level_from_experience(generation: int, species: int, exp: int) -> int | None:

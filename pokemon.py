@@ -2,8 +2,8 @@
 
 The native Generation I and III–VII save handlers attach format-specific
 attributes (encrypted records, snapshots, names, and slot metadata) at parse
- time. The database payload preserves those attributes for lossless same-gen
- exports. Core fields remain scalar and compatible with the SQLite schema.
+time. The database payload preserves those attributes for lossless same-gen
+exports. Core fields remain scalar and compatible with the SQLite schema.
 """
 from __future__ import annotations
 from dataclasses import dataclass

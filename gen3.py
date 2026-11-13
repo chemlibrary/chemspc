@@ -23,22 +23,9 @@ Format references:
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Sequence
 
-try:
-    from chempy.files import bytes_safe_write
-except ModuleNotFoundError:
-    def bytes_safe_write(*, path: str | os.PathLike[str], contents: bytes | bytearray) -> None:
-        """Minimal atomic writer for standalone use when chempy is unavailable."""
-        destination = Path(path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary = destination.with_name(destination.name + ".tmp")
-        with open(temporary, "wb") as file:
-            file.write(contents)
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temporary, destination)
+from save_io import bytes_safe_write
 
 from pokemon import Pokemon
 from experience import level_from_experience
@@ -86,8 +73,6 @@ SECTION_CHECKSUM_SIZES_BY_PROFILE = {
     "emerald": {**_COMMON_SECTION_CHECKSUM_SIZES, 0: 0xF2C, 4: 0xF08},
     "frlg": {**_COMMON_SECTION_CHECKSUM_SIZES, 0: 0xF24, 4: 0xEE8},
 }
-# Backwards-convenient public checksum table (Emerald lengths).
-SECTION_CHECKSUM_SIZES = SECTION_CHECKSUM_SIZES_BY_PROFILE["emerald"]
 
 # (party count offset, first party record offset, count width). All listed games
 # use a one-byte count and three padding bytes; FRLG's SaveBlock1 starts earlier.
@@ -491,7 +476,6 @@ class Gen3_Save:
     generation = 3
 
     def __init__(self, path: str | os.PathLike[str] | None = None, *, game: str = "auto"):
-        self.save_size = SAVE_SIZE
         self.path = os.fspath(path) if path is not None else "./gen3-save.sav"
         normalized = str(game).strip().lower().replace("_", "-")
         if normalized not in _GAME_ALIASES:
@@ -533,14 +517,6 @@ class Gen3_Save:
         self._load_active_slot()
         self.party_pokemon = self.extract_gen3_party_pokemon()
         self.box_pokemon = self.extract_gen3_pokemon_boxes()
-
-    @staticmethod
-    def read_gen3_save(path: str | os.PathLike[str]) -> bytes:
-        with open(path, "rb") as file:
-            data = file.read()
-        if len(data) != SAVE_SIZE:
-            raise ValueError(f"Expected a {SAVE_SIZE}-byte Generation III save, got {len(data)} bytes")
-        return data
 
     def _inspect_slot(self, slot_number: int, profile: str) -> dict | None:
         slot_start = SLOT_OFFSETS[slot_number]
@@ -634,14 +610,6 @@ class Gen3_Save:
         for index, section_id in enumerate(range(5, 14)):
             start = index * SECTOR_DATA_SIZE
             self.section_data[section_id][:] = storage[start:start + SECTOR_DATA_SIZE]
-
-    def print_all_pokemon(self) -> None:
-        for pokemon in self.party_pokemon:
-            print(f"{pokemon.name} (#{pokemon.species}) - lvl {pokemon.level}")
-        for box_number, box in enumerate(self.box_pokemon, start=1):
-            for pokemon in box:
-                level_text = f"lvl {pokemon.level}" if pokemon.level else "level stored in EXP"
-                print(f"Box {box_number}: {pokemon.name} (#{pokemon.species}) - {level_text}")
 
     def extract_gen3_party_pokemon(self) -> list[Pokemon]:
         if not self.section_data:
@@ -783,6 +751,3 @@ class Gen3_Save:
         output_path = f"{self.path}.new"
         bytes_safe_write(path=output_path, contents=self.save_bytes)
         return output_path
-
-
-Generation3Save = Gen3_Save

@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 import os
-import tempfile
 from pathlib import Path
 
 from pokemon import Pokemon
+from save_io import bytes_safe_write
 
 SAVE_SIZE = 32768
 PARTY_START = 10378
 PARTY_SIZE = 428
-BOX_START = 0x4000
 BOX_COUNT = 14
 BOX_SIZE = 1104
 BOX_DATA_SIZE = BOX_SIZE - 2
@@ -48,11 +47,9 @@ class Gen2_Save:
     current_box_offset = CURRENT_BOX_OFFSET
 
     def __init__(self, path: str | os.PathLike | None = None):
-        self.save_size = SAVE_SIZE
         self.party_list_start_offset = self.party_offset
         self.party_ots_start_offset = 8 + (6 * 48)
         self.party_names_start_offset = self.party_ots_start_offset + (11 * 6)
-        self.box_lists_start_offset = BOX_START
         self.box_offsets = BOX_OFFSETS
         self.party_pokemon: list[Pokemon] = []
         self.box_pokemon: list[list[Pokemon]] = [[] for _ in range(BOX_COUNT)]
@@ -71,20 +68,6 @@ class Gen2_Save:
             self.save_bytes = bytearray(raw)
             self.party_pokemon = self.extract_gen2_party_pokemon()
             self.box_pokemon = self.extract_gen2_pokemon_boxes()
-
-    def read_gen2_save(self, path: str | os.PathLike) -> bytes:
-        """Read an exact-size English Gold/Silver save image from disk."""
-        raw = Path(path).read_bytes()
-        if len(raw) != SAVE_SIZE:
-            raise ValueError(f"Expected a {SAVE_SIZE:,}-byte Gold/Silver save, received {len(raw):,} bytes")
-        return raw
-
-    def print_all_pokemon(self) -> None:
-        for pokemon in self.party_pokemon:
-            print(f"{pokemon.name} (#{pokemon.species}) - lvl {pokemon.level}")
-        for box_no, box in enumerate(self.box_pokemon, start=1):
-            for slot_no, pokemon in enumerate(box, start=1):
-                print(f"Box {box_no}, slot {slot_no}: {pokemon.name} (#{pokemon.species}) - lvl {pokemon.level}")
 
     def extract_gen2_party_pokemon(self) -> list[Pokemon]:
         start = self.party_list_start_offset
@@ -233,20 +216,7 @@ class Gen2_Save:
         self.save_bytes[self.current_box_offset:self.current_box_offset + BOX_DATA_SIZE] = current_bytes
         self._finalize_checksums()
         destination = Path(path) if path is not None else Path(f"{self.path}.new")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        fd, temporary_name = tempfile.mkstemp(prefix=f".{destination.name}.", suffix=".tmp", dir=str(destination.parent))
-        try:
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(self.save_bytes)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary_name, destination)
-        except Exception:
-            try:
-                os.unlink(temporary_name)
-            except OSError:
-                pass
-            raise
+        bytes_safe_write(path=destination, contents=self.save_bytes)
         return str(destination)
 
 

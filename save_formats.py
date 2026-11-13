@@ -1,8 +1,6 @@
-"""Registry and safe, generation-aware helpers for the existing save handlers.
+"""Game registry, upload normalization, and native save-handler adapters.
 
-This module deliberately imports each generation parser lazily.  The original
-chemspc repository provides gen1.py through gen7.py; a reduced checkout that
-only contains gen2.py can still start and report supported games correctly.
+Parsers are loaded on demand for the selected game.
 """
 from __future__ import annotations
 
@@ -18,7 +16,6 @@ class GameSpec:
     label: str
     parser_module: str
     parser_class: str
-    party_capacity: int = 6
     box_count: int = 0
     box_capacity: int = 0
     description: str = ""
@@ -167,8 +164,7 @@ def open_save(path: str | Path, game: str):
     except ModuleNotFoundError as exc:
         raise ValueError(
             f"The {spec.parser_module}.py save handler is missing from this checkout. "
-            "Keep the original generation handlers from the chemspc repository when "
-            "applying the Flask update."
+            "Restore the application's generation handler files and try again."
         ) from exc
     parser_class = getattr(module, spec.parser_class, None)
     if parser_class is None:
@@ -276,10 +272,7 @@ def put_in_box(save: Any, pokemon: Any, generation: int, box_index: int, slot: i
         setattr(pokemon, box_attr, box_index)
         setattr(pokemon, slot_attr, slot)
         setattr(pokemon, record_attr, record)
-        if generation == 6:
-            start = save.box_offset + (box_index * 30 + slot) * 232
-        else:
-            start = save.box_offset + (box_index * 30 + slot) * 232
+        start = save.box_offset + (box_index * 30 + slot) * 232
         save.save_bytes[start:start + 232] = record
         # These writers only retain records they know about. Register this newly
         # inserted, same-generation record as a validated native slot.

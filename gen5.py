@@ -23,21 +23,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Iterable
 
-try:
-    from chempy.files import bytes_safe_write
-except ModuleNotFoundError:
-    def bytes_safe_write(*, path: str | os.PathLike[str], contents: bytes | bytearray) -> None:
-        """Atomically write bytes, with a fallback when chempy is unavailable."""
-        destination = Path(path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary = destination.with_name(destination.name + ".tmp")
-        with open(temporary, "wb") as handle:
-            handle.write(contents)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, destination)
+from save_io import bytes_safe_write
 
 from gen4 import crc16_ccitt, decode_gen4_text
 from pokemon import Pokemon
@@ -396,14 +383,6 @@ class Gen5_Save:
             all_boxes.append(records)
         self.box_pokemon = all_boxes
 
-    def print_all_pokemon(self) -> None:
-        for index, pokemon in enumerate(self.party_pokemon, 1):
-            print(f"Party {index}: {pokemon.name} (species {pokemon.species})")
-        for box_index, box in enumerate(self.box_pokemon, 1):
-            for pokemon in box:
-                print(f"Box {box_index}, slot {getattr(pokemon, 'gen5_box_slot', -1) + 1}: "
-                      f"{pokemon.name} (species {pokemon.species})")
-
     def _set_block_checksum(self, data: bytearray, base: int, block_start: int,
                             block_length: int, checksum_offset: int, mirror_id: int) -> None:
         checksum = crc16_ccitt(data[base + block_start:base + block_start + block_length])
@@ -494,6 +473,3 @@ class Gen5_Save:
         output_path = f"{self.path}.new"
         bytes_safe_write(path=output_path, contents=output)
         return output_path
-
-
-Generation5Save = Gen5_Save
