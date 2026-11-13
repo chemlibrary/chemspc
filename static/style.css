@@ -123,6 +123,12 @@ td small.subline { display: block; color: var(--muted); font: 10px/1.6 var(--mon
 .page-intro h1 { font-size: 44px; margin: 10px 0 15px; }
 .page-intro p { font-size: 13px; margin: 0; }
 .compact { font-size: 12px; margin: 0 0 20px; }
+.selection-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; padding: 12px 14px; margin-bottom: 16px; background: #e7eedf; border: 1px solid #94a78c; border-radius: 3px; }
+.selection-toolbar[hidden] { display: none; }
+.select-all { display: inline-flex; align-items: center; gap: 10px; min-height: 24px; font: bold 11px/1.6 var(--mono); cursor: pointer; }
+.select-all input { width: 18px; height: 18px; margin: 0; accent-color: var(--green); }
+.select-all:has(input:disabled) { color: var(--muted); cursor: default; }
+.selection-count { color: var(--muted); font: 10px/1.6 var(--mono); }
 .pokemon-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .pokemon-card { display: flex; flex-direction: column; min-width: 0; position: relative; border: 2px solid #94a78c; background: #f0f4e6; border-radius: 3px; padding: 16px; cursor: pointer; }
 .pokemon-card:hover { background: #e5eed8; border-color: var(--green); }
