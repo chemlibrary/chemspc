@@ -12,6 +12,7 @@ Format references:
     https://bulbapedia.bulbagarden.net/wiki/Pok%C3%A9mon_data_structure_in_Generation_IV
     https://github.com/kwsch/PKHeX/blob/master/PKHeX.Core/Saves/SAV4.cs
     https://github.com/kwsch/PKHeX/blob/master/PKHeX.Core/Saves/SAV4Sinnoh.cs
+    https://github.com/kwsch/PKHeX/blob/master/PKHeX.Core/Saves/SAV4Pt.cs
     https://github.com/kwsch/PKHeX/blob/master/PKHeX.Core/Saves/SAV4HGSS.cs
 """
 from __future__ import annotations
@@ -35,11 +36,10 @@ except ModuleNotFoundError:
         os.replace(temporary, destination)
 
 from pokemon import Pokemon
+from gen4_growth import level_from_experience
 
 SAVE_SIZE = 0x80000          # 512 KiB
 PARTITION_SIZE = 0x40000     # primary/backup partition distance
-PARTY_COUNT_OFFSET = 0x94
-PARTY_RECORDS_OFFSET = 0x98
 PARTY_CAPACITY = 6
 PARTY_RECORD_SIZE = 236
 BOX_COUNT = 18
@@ -48,13 +48,15 @@ BOX_RECORD_SIZE = 136
 BLOCK_MAGICS = (0x20060623, 0x20070903)  # international/Japanese, Korean
 
 # Small/general size, storage start relative to partition, storage block size,
-# footer bytes excluded from CRC, and storage layout kind.
+# footer bytes excluded from CRC, and storage layout kind. Platinum's party
+# records start eight bytes later than D/P/HGSS; the count is four bytes before
+# the records. Both extraction and serialization use this per-game location.
 PROFILES = {
-    "diamond":   {"profile": "dp",   "general_size": 0xC100, "storage_start": 0xC100, "storage_size": 0x121E0, "footer_size": 0x14, "storage_kind": "sinnoh"},
-    "pearl":     {"profile": "dp",   "general_size": 0xC100, "storage_start": 0xC100, "storage_size": 0x121E0, "footer_size": 0x14, "storage_kind": "sinnoh"},
-    "platinum":  {"profile": "pt",   "general_size": 0xCF2C, "storage_start": 0xCF2C, "storage_size": 0x121E4, "footer_size": 0x14, "storage_kind": "sinnoh"},
-    "heartgold": {"profile": "hgss", "general_size": 0xF628, "storage_start": 0xF700, "storage_size": 0x12310, "footer_size": 0x10, "storage_kind": "hgss"},
-    "soulsilver":{ "profile": "hgss", "general_size": 0xF628, "storage_start": 0xF700, "storage_size": 0x12310, "footer_size": 0x10, "storage_kind": "hgss"},
+    "diamond":   {"profile": "dp", "party_start": 0x98,   "general_size": 0xC100, "storage_start": 0xC100, "storage_size": 0x121E0, "footer_size": 0x14, "storage_kind": "sinnoh"},
+    "pearl":     {"profile": "dp", "party_start": 0x98,   "general_size": 0xC100, "storage_start": 0xC100, "storage_size": 0x121E0, "footer_size": 0x14, "storage_kind": "sinnoh"},
+    "platinum":  {"profile": "pt", "party_start": 0xA0,   "general_size": 0xCF2C, "storage_start": 0xCF2C, "storage_size": 0x121E4, "footer_size": 0x14, "storage_kind": "sinnoh"},
+    "heartgold": {"profile": "hgss", "party_start": 0x98, "general_size": 0xF628, "storage_start": 0xF700, "storage_size": 0x12310, "footer_size": 0x10, "storage_kind": "hgss"},
+    "soulsilver":{ "profile": "hgss", "party_start": 0x98, "general_size": 0xF628, "storage_start": 0xF700, "storage_size": 0x12310, "footer_size": 0x10, "storage_kind": "hgss"},
 }
 GAME_ALIASES = {
     "d": "diamond", "diamond": "diamond", "dp": "diamond", "diamond-pearl": "diamond",
@@ -223,7 +225,7 @@ def _parse_pokemon(record: bytes, *, party: bool, game_name: str,
             seed = (0x41C64E6D * seed + 0x6073) & 0xFFFFFFFF
             word = _u16(party_stats, offset) ^ (seed >> 16)
             party_stats[offset:offset + 2] = word.to_bytes(2, "little")
-    level = party_stats[4] if party else None
+    level = party_stats[4] if party else level_from_experience(species, exp)
     status = _u32(party_stats, 0) if party else None
     current_hp = _u16(party_stats, 6) if party else None
     max_hp = _u16(party_stats, 8) if party else None
@@ -318,6 +320,8 @@ class Gen4_Save:
         self.game_name = GAME_ALIASES[normalized]
         self.game = self.game_name
         self.profile = PROFILES[self.game]
+        self.party_records_offset = self.profile["party_start"]
+        self.party_count_offset = self.party_records_offset - 4
         self.save_bytes = bytearray()
         self.party_pokemon: list[Pokemon] = []
         self.box_pokemon: list[list[Pokemon]] = [[] for _ in range(BOX_COUNT)]
@@ -385,12 +389,12 @@ class Gen4_Save:
     def _extract_party(self) -> None:
         assert self.active_general_offset is not None
         base = self.active_general_offset
-        count = self.save_bytes[base + PARTY_COUNT_OFFSET]
+        count = self.save_bytes[base + self.party_count_offset]
         if count > PARTY_CAPACITY:
             raise ValueError(f"Invalid Gen IV party count {count}; expected 0-{PARTY_CAPACITY}")
         result: list[Pokemon] = []
         for slot in range(count):
-            start = base + PARTY_RECORDS_OFFSET + slot * PARTY_RECORD_SIZE
+            start = base + self.party_records_offset + slot * PARTY_RECORD_SIZE
             record = bytes(self.save_bytes[start:start + PARTY_RECORD_SIZE])
             if not _record_present(record[:BOX_RECORD_SIZE]):
                 raise ValueError(f"Party slot {slot + 1} claims a Pokémon but its record is empty")
@@ -448,8 +452,8 @@ class Gen4_Save:
         # Keep all checksum-valid general copies consistent, not just the newest
         # one: a game may use a backup general block if power was lost on save.
         for base in valid_general:
-            output[base + PARTY_COUNT_OFFSET] = len(self.party_pokemon)
-            party_start = base + PARTY_RECORDS_OFFSET
+            output[base + self.party_count_offset] = len(self.party_pokemon)
+            party_start = base + self.party_records_offset
             output[party_start:party_start + PARTY_CAPACITY * PARTY_RECORD_SIZE] = bytes(PARTY_CAPACITY * PARTY_RECORD_SIZE)
             for slot, pokemon in enumerate(self.party_pokemon):
                 record = getattr(pokemon, "gen4_party_record", None)

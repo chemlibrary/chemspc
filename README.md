@@ -186,6 +186,14 @@ python -m unittest discover -s tests -v
 
 The tests include generation-specific save parsing/writing, checksums and record layouts, database behavior, the Flask transfer workflow, and upload normalization across supported game sizes. Synthetic fixtures provide regression coverage but do not replace validation against known-good real save files and an emulator.
 
+Run the focused Gen IV offset and growth-rate regressions with:
+
+```bash
+python -m unittest discover -s tests -p test_gen4_regressions.py -v
+```
+
+Set `CHEMSPC_PLATINUM_FIXTURE` to the absolute path of the Platinum save used for these regressions to also run the real-save and Flask transfer checks. These checks write only to temporary copies and a temporary database, verify retained Pokémon records and save checksums, and check that the original file's SHA-256 remains unchanged. The real-save assertions expect six party Pokémon (Golbat, Leafeon, Pelipper, Giratina, Graveler, and Empoleon) and 117 boxed Pokémon; the fixture itself is not included in the repository.
+
 ## Project layout
 
 | Path | Purpose |
