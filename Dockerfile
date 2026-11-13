@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements-docker.txt \
 COPY *.py ./
 COPY templates/ ./templates/
 COPY static/ ./static/
+COPY data/pokemon_names/ ./data/pokemon_names/
 COPY docker/entrypoint.py /app/docker-entrypoint.py
 COPY LICENSE ./
 

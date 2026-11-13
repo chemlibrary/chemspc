@@ -6,12 +6,13 @@ from pathlib import Path
 import pytest
 
 from gen1 import Gen1_Save, _checksum as gen1_checksum, decode_gen1_text
-from gen2 import Crystal_Save, Gen2_Save, is_valid_crystal_save, is_valid_gold_silver_save
+from gen2 import Crystal_Save, Gen2_Save
 from gen3 import Gen3_Save
 from gen4 import Gen4_Save
 from gen5 import Gen5_Save
 from gen6 import Gen6_Save
 from gen7 import Gen7_Save
+from save_formats import GAME_SPECS
 
 
 @pytest.mark.parametrize(
@@ -64,11 +65,46 @@ def test_gen1_checksum_is_complemented_byte_sum() -> None:
     assert gen1_checksum(b"") == 0xFF
 
 
-def test_gen2_checksum_predicates_reject_uninitialized_bytes() -> None:
-    blank_save = bytes(0x8000)
+@pytest.mark.parametrize('handler', [Gen2_Save, Crystal_Save], ids=['gold-silver', 'crystal'])
+def test_gen2_writer_updates_checksums_and_preserves_source(handler, tmp_path) -> None:
+    source = tmp_path / 'source.sav'
+    # An empty synthetic save is accepted by the current Gen II readers.
+    source.write_bytes(bytes(0x8000))
+    save = handler(path=source)
+    save.save_bytes[0x2100:0x2104] = b'ABCD'
+    output = Path(save.write_save())
+    data = output.read_bytes()
 
-    assert is_valid_gold_silver_save(blank_save) is False
-    assert is_valid_crystal_save(blank_save) is False
+    assert output != source
+    assert source.read_bytes() == bytes(0x8000)
+    assert len(data) == 0x8000
+    assert handler(path=output).party_pokemon == []
+    if handler is Crystal_Save:
+        expected = sum(data[0x2009:0x2B83]) & 0xFFFF
+        assert int.from_bytes(data[0x2D0D:0x2D0F], 'little') == expected
+        assert int.from_bytes(data[0x1F0D:0x1F0F], 'little') == expected
+        assert data[0x2009:0x2B83] == data[0x1209:0x1D83]
+    else:
+        assert int.from_bytes(data[0x2D69:0x2D6B], 'little') == sum(data[0x2009:0x2D69]) & 0xFFFF
+        backup_sum = sum(data[0x0C6B:0x17ED]) + sum(data[0x3D96:0x3F40]) + sum(data[0x7E39:0x7E6D])
+        assert int.from_bytes(data[0x7E6D:0x7E6F], 'little') == backup_sum & 0xFFFF
+
+
+@pytest.mark.parametrize('game', GAME_SPECS)
+def test_registry_routes_each_game_to_its_native_handler(game, tmp_path, monkeypatch):
+    from importlib import import_module
+    from unittest.mock import Mock
+    from save_formats import get_game_spec, open_save
+
+    spec = get_game_spec(game)
+    constructor = Mock()
+    monkeypatch.setattr(import_module(spec.parser_module), spec.parser_class, constructor)
+    path = tmp_path / 'save.sav'
+    assert open_save(path, game) is constructor.return_value
+    if spec.generation == 2:
+        constructor.assert_called_once_with(path=path)
+    else:
+        constructor.assert_called_once_with(path=path, game=game)
 
 
 def test_gen1_rejects_missing_file(tmp_path: Path) -> None:

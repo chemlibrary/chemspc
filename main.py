@@ -14,6 +14,7 @@ from werkzeug.utils import secure_filename
 
 import db
 from pokemon import Pokemon
+from pokemon_names import item_name, move_names
 from save_formats import (
     GAME_SPECS,
     box_record,
@@ -31,6 +32,8 @@ app = Flask(
     instance_path=os.environ.get("CHEMSPC_INSTANCE_PATH"),
 )
 app.secret_key = os.environ.get("CHEMSPC_SECRET_KEY") or secrets.token_hex(32)
+app.jinja_env.filters['item_name'] = item_name
+app.jinja_env.filters['move_names'] = move_names
 # Permit moderate emulator-added trailers; staged files are normalized to the
 # selected game's known raw-save size before any parser sees them.
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024

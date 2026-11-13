@@ -25,7 +25,7 @@
         <span class="card-position">{{ entry.position }}</span>
         <span class="card-title">{{ p.name or 'Unnamed' }}</span>
         <span class="card-meta">Species #{{ p.species }} <i>·</i> Lv. {{ p.level }}</span>
-        <span class="card-details">Item {{ p.held_item }} <i>·</i> Moves {{ [p.move1, p.move2, p.move3, p.move4]|select('ne', 0)|join(', ') or '—' }}</span>
+        <span class="card-details">Item {{ p.held_item|item_name(p.generation) }} <i>·</i> Moves {{ [p.move1, p.move2, p.move3, p.move4]|move_names(p.generation)|join(', ') or '—' }}</span>
         <span class="card-action">Select to import</span>
       </label>
       {% endfor %}
@@ -46,7 +46,7 @@
       <tr class="{% if item.issues %}row-disabled{% endif %}">
         <td class="check-col"><input type="checkbox" name="export_uid" value="{{ item.row.uid }}" aria-label="Export {{ p.name or 'Pokémon' }}" {% if item.issues %}disabled{% endif %}></td>
         <td><strong>{{ p.name or 'Unnamed' }}</strong><small class="subline">UID {{ item.row.uid }} · Gen {{ p.generation }} · Lv. {{ p.level }}</small></td>
-        <td>#{{ p.species }}</td><td>{{ p.held_item }}</td><td class="move-cell">{{ [p.move1, p.move2, p.move3, p.move4]|select('ne', 0)|join(', ') or '—' }}</td>
+        <td>#{{ p.species }}</td><td>{{ p.held_item|item_name(p.generation) }}</td><td class="move-cell">{{ [p.move1, p.move2, p.move3, p.move4]|move_names(p.generation)|join(', ') or '—' }}</td>
         <td>{% if item.issues %}<span class="status status-bad">Not compatible</span><span class="issue-detail">{{ item.issues|join(' ') }}</span>{% else %}<span class="status status-good">Compatible</span>{% endif %}</td>
       </tr>
       {% endfor %}

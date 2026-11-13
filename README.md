@@ -7,6 +7,7 @@ ChemsPC is intended for personal, local use. It is not a save editor for arbitra
 ## Features
 
 - A Flask website for reviewing Pokémon in a save file and in the active database.
+- English move and held-item names across Generations I–VII in collection and transfer views, using bundled offline tables. Generation I shows its catch-rate byte separately because held items did not exist yet; empty items show “None” and unrecognized IDs have an explicit fallback label.
 - Selective imports from the source save's party and PC boxes.
 - Selective exports from the database into an available PC box slot in the selected save.
 - An explicit **Finalize** step. Selections are staged until finalization.
@@ -182,7 +183,8 @@ Staged uploads and generated output files are stored under Flask's `instance/` d
 Run the test suite from the repository root after installing requirements:
 
 ```bash
-python -m unittest discover -s tests -v
+python -m pip install -r requirements-dev.txt
+python -m pytest
 ```
 
 The tests include generation-specific save parsing/writing, checksums and record layouts, database behavior, the Flask transfer workflow, and upload normalization across supported game sizes. Synthetic fixtures provide regression coverage but do not replace validation against known-good real save files and an emulator.

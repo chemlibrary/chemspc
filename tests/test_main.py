@@ -1,265 +1,294 @@
-"""CLI routing and extraction workflow tests for main.py."""
-from __future__ import annotations
+"""Flask upload, selective transfer, transaction, and download regressions.
 
-import importlib
-import sys
-from types import SimpleNamespace
+Native parsing/writing is replaced at the format boundary. Routes, sessions,
+CSRF checks, selection validation, storage placement, and SQLite are real.
+"""
+from copy import deepcopy
+from io import BytesIO
 from pathlib import Path
-from unittest.mock import Mock
+import sqlite3
+from types import SimpleNamespace
 
 import pytest
+from werkzeug.datastructures import MultiDict
+
+from pokemon import Pokemon
+from save_formats import GAME_SPECS, SAVE_SIZES
+
+
+def native_pokemon(generation, name):
+    pokemon = Pokemon(generation=generation, name=name, species=25, level=20,
+                      move1=33, original_trainer_name='ASH')
+    if generation == 1:
+        pokemon._gen1_box_record = bytes(33)
+        pokemon._gen1_species_index = 0x54
+        pokemon._gen1_ot_name_bytes = b'\x50' * 11
+        pokemon._gen1_nickname_bytes = b'\x50' * 11
+    elif generation == 3:
+        pokemon.gen3_box_record = bytes(80)
+        pokemon._gen3_original_snapshot_box = {'species': 25}
+    elif generation in (4, 5):
+        setattr(pokemon, f'gen{generation}_box_record', bytes(136))
+    elif generation in (6, 7):
+        setattr(pokemon, f'gen{generation}_record', bytes(232))
+    return pokemon
 
 
 @pytest.fixture
-def main_module(monkeypatch: pytest.MonkeyPatch):
-    """Import main even on snapshots missing its required batch DB helper.
+def web_app(tmp_path, monkeypatch, db_module):
+    import main
 
-    There is a separate database contract test that reports the missing helper.
-    This compatibility shim lets the rest of the CLI/workflow tests run so one
-    missing symbol does not mask unrelated behavior.
-    """
-    import db
+    upload_dir = tmp_path / 'staging'
+    export_dir = tmp_path / 'exports'
+    upload_dir.mkdir()
+    export_dir.mkdir()
+    monkeypatch.setitem(main.app.config, 'TESTING', True)
+    monkeypatch.setitem(main.app.config, 'SECRET_KEY', 'test-session-key')
+    monkeypatch.setitem(main.app.config, 'UPLOAD_FOLDER', str(upload_dir))
+    monkeypatch.setitem(main.app.config, 'EXPORT_FOLDER', str(export_dir))
+    db_module.init_tables()
+    opened = []
+    written = []
 
-    if not callable(getattr(db, "add_pokemon_batch", None)):
-        monkeypatch.setattr(db, "add_pokemon_batch", lambda _records: None, raising=False)
+    class FakeSave:
+        def __init__(self, path, game):
+            self.path = Path(path)
+            self.game_name = game
+            spec = GAME_SPECS[game]
+            self.party_pokemon = [native_pokemon(spec.generation, 'PartyMon'),
+                                  native_pokemon(spec.generation, 'KeepParty')]
+            self.box_pokemon = [[] for _ in range(spec.box_count)]
+            self.box_pokemon[0] = [native_pokemon(spec.generation, 'BoxMon'),
+                                   native_pokemon(spec.generation, 'KeepBox')]
+            # Gen VI/VII placement also updates the retained native box bytes.
+            self.save_bytes = bytearray(SAVE_SIZES[game])
+            self.box_offset = 0
+            self._original_box_records = {}
+            for slot, pokemon in enumerate(self.box_pokemon[0]):
+                for attr in (f'gen{spec.generation}_box_index', f'gen{spec.generation}_box_number'):
+                    setattr(pokemon, attr, 0)
+                setattr(pokemon, f'gen{spec.generation}_box_slot', slot)
+            opened.append(self)
 
-    sys.modules.pop("main", None)
-    module = importlib.import_module("main")
-    yield module
-    sys.modules.pop("main", None)
+        def write_save(self):
+            written.append(deepcopy(self))
+            output = Path(str(self.path) + '.new')
+            output.write_bytes(b'generated save')
+            return str(output)
 
+    monkeypatch.setattr(main, 'open_save', FakeSave)
+    client = main.app.test_client()
+    client.get('/')  # Establish a real CSRF token in the session.
+    with client.session_transaction() as session:
+        csrf = session['csrf_token']
 
-IMPORT_CASES = [
-    pytest.param("import_gen1", "Gen1_Save", "yellow", 12, "yellow", id="gen1-yellow"),
-    pytest.param("import_gen2", "Gen2_Save", "crystal", 14, "crystal", id="gen2-crystal"),
-    pytest.param("import_gen3", "Gen3_Save", "emerald", 14, "emerald", id="gen3-emerald"),
-    pytest.param("import_gen4", "Gen4_Save", "diamond", 18, "diamond", id="gen4-diamond"),
-    pytest.param("import_gen5", "Gen5_Save", "black2", 24, "black2", id="gen5-black2"),
-    pytest.param("import_gen6", "Gen6_Save", "x", 31, "x", id="gen6-x"),
-    pytest.param("import_gen7", "Gen7_Save", "sun", 32, "sun", id="gen7-sun"),
-]
+    def post(url, **fields):
+        data = MultiDict({'csrf_token': csrf})
+        for key, value in fields.items():
+            data.setlist(key, value if isinstance(value, list) else [value])
+        return client.post(url, data=data)
 
+    def upload(game='crystal', payload=None):
+        if payload is None:
+            payload = bytes(SAVE_SIZES[game])
+        return post('/open-save', game=game, save_file=(BytesIO(payload), 'original.sav'))
 
-@pytest.fixture
-def fake_save_factory():
-    """Build controllable save classes and retain the instances for assertions."""
-    instances = []
-
-    def factory(expected_box_count: int, default_game: str):
-        class FakeSave:
-            def __init__(self, path, game=None):
-                self.path = str(path)
-                self.game_name = game or default_game
-                self.party_pokemon = [SimpleNamespace(name="PartyMon", species=1)]
-                self.box_pokemon = [[SimpleNamespace(name="BoxMon", species=2)]]
-                self.expected_box_count = expected_box_count
-                self.write_count = 0
-                self.print_count = 0
-                instances.append(self)
-
-            def print_all_pokemon(self):
-                self.print_count += 1
-
-            def write_save(self):
-                self.write_count += 1
-                # The orchestration must clear in-memory Pokémon only after the
-                # database batch succeeds and before writing the new save copy.
-                assert self.party_pokemon == []
-                assert len(self.box_pokemon) == self.expected_box_count
-                assert all(not box for box in self.box_pokemon)
-                return self.path + ".new"
-
-        return FakeSave
-
-    factory.instances = instances
-    return factory
-
-
-@pytest.mark.parametrize(
-    ("import_name", "class_name", "game", "box_count", "expected_source"),
-    IMPORT_CASES,
-)
-def test_import_flow_commits_batch_then_clears_and_writes(
-    main_module,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    fake_save_factory,
-    import_name: str,
-    class_name: str,
-    game: str,
-    box_count: int,
-    expected_source: str,
-) -> None:
-    source_path = tmp_path / "input.sav"
-    source_path.write_bytes(b"placeholder")
-    events = []
-    batches = []
-
-    monkeypatch.setattr(main_module, "init_tables", lambda: events.append("init"))
-
-    def save_batch(records):
-        events.append("database-commit")
-        batches.append(list(records))
-
-    monkeypatch.setattr(main_module, "add_pokemon_batch", save_batch)
-    fake_class = fake_save_factory(box_count, expected_source)
-    monkeypatch.setattr(main_module, class_name, fake_class)
-
-    importer = getattr(main_module, import_name)
-    result = importer(str(source_path), game)
-
-    save = fake_save_factory.instances[-1]
-    assert result == str(source_path) + ".new"
-    assert save.print_count == 1
-    assert save.write_count == 1
-    assert events.index("init") < events.index("database-commit")
-    assert len(batches) == 1
-    assert [mon.name for mon in batches[0]] == ["PartyMon", "BoxMon"]
-    assert all(mon.game_name == expected_source for mon in batches[0])
+    return SimpleNamespace(main=main, db=db_module, client=client, post=post,
+                           upload=upload, opened=opened, written=written,
+                           upload_dir=upload_dir, export_dir=export_dir)
 
 
-@pytest.mark.parametrize(
-    ("import_name", "class_name", "game", "box_count", "default_source", "expected_source"),
-    [
-        pytest.param("import_gen1", "Gen1_Save", "red", 12, "red", "generation-1", id="gen1-source-override"),
-        pytest.param("import_gen3", "Gen3_Save", "ruby", 14, "ruby", "generation-3", id="gen3-source-override"),
-        pytest.param("import_gen5", "Gen5_Save", "black", 24, "black", "generation-5", id="gen5-source-override"),
-        pytest.param("import_gen7", "Gen7_Save", "moon", 32, "moon", "generation-7", id="gen7-source-override"),
-    ],
-)
-def test_import_respects_explicit_source_game(
-    main_module,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    fake_save_factory,
-    import_name: str,
-    class_name: str,
-    game: str,
-    box_count: int,
-    default_source: str,
-    expected_source: str,
-) -> None:
-    path = tmp_path / "input.sav"
-    path.write_bytes(b"placeholder")
-    captured = []
-    monkeypatch.setattr(main_module, "init_tables", Mock())
-    monkeypatch.setattr(main_module, "add_pokemon_batch", lambda records: captured.extend(records))
-    monkeypatch.setattr(main_module, class_name, fake_save_factory(box_count, default_source))
+@pytest.mark.parametrize('game', GAME_SPECS)
+def test_selective_import_export_workflow_for_every_game(web_app, game):
+    web = web_app
+    generation = GAME_SPECS[game].generation
+    exported = native_pokemon(generation, 'ExportMon')
+    web.db.add_pokemon(exported)
+    uid = web.db.list_pokemon()[0]['uid']
 
-    getattr(main_module, import_name)(str(path), game, source_game=expected_source)
+    response = web.upload(game)
+    assert response.status_code == 302
+    assert response.location.endswith('/manage')
+    assert web.opened[-1].game_name == game
+    source = web.opened[-1].path
+    original = source.read_bytes()
+    assert len(original) == SAVE_SIZES[game]
+    # Upload/review stage nothing in the database and do not invoke the writer.
+    assert web.client.get('/manage').status_code == 200
+    assert [row['name'] for row in web.db.list_pokemon()] == ['ExportMon']
+    assert not web.written
 
-    assert captured
-    assert all(pokemon.game_name == expected_source for pokemon in captured)
+    response = web.post('/finalize', import_slot=['party:0', 'box:0:0'], export_uid=str(uid))
+    assert response.status_code == 302
+    assert '/result/' in response.location
+    assert 'imported=2' in response.location and 'exported=1' in response.location
+    assert len(web.written) == 1
+    result = web.written[0]
+    assert [p.name for p in result.party_pokemon] == ['KeepParty']
+    assert [p.name for p in result.box_pokemon[0]] == ['KeepBox', 'ExportMon']
+    assert all(not box for box in result.box_pokemon[1:])
 
+    rows = web.db.list_pokemon()
+    assert [row['name'] for row in rows] == ['PartyMon', 'BoxMon']
+    for row in rows:
+        restored = web.db.row_to_pokemon(row)
+        assert restored.source_game == game
+        assert restored.game_name == game
+        assert web.main.has_native_export_record(restored, generation)
+    inactive = web.db.list_pokemon(active=False)
+    assert [(row['uid'], row['name']) for row in inactive] == [(uid, 'ExportMon')]
+    assert web.main.has_native_export_record(web.db.row_to_pokemon(inactive[0]), generation)
 
-@pytest.mark.parametrize(
-    ("import_name", "game"),
-    [
-        ("import_gen1", "not-a-game"),
-        ("import_gen2", "not-a-game"),
-        ("import_gen3", "not-a-game"),
-        ("import_gen5", "not-a-game"),
-        ("import_gen6", "not-a-game"),
-        ("import_gen7", "not-a-game"),
-    ],
-)
-def test_invalid_game_is_rejected_before_database_initialization(
-    main_module, monkeypatch: pytest.MonkeyPatch, import_name: str, game: str
-) -> None:
-    initialize = Mock()
-    monkeypatch.setattr(main_module, "init_tables", initialize)
-
-    with pytest.raises(ValueError):
-        getattr(main_module, import_name)("unused.sav", game)
-
-    initialize.assert_not_called()
-
-
-def test_database_batch_failure_does_not_clear_or_write_save(
-    main_module,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    fake_save_factory,
-) -> None:
-    path = tmp_path / "input.sav"
-    path.write_bytes(b"placeholder")
-    FakeSave = fake_save_factory(12, "red")
-    monkeypatch.setattr(main_module, "Gen1_Save", FakeSave)
-    monkeypatch.setattr(main_module, "init_tables", Mock())
-
-    def fail_batch(_records):
-        raise RuntimeError("simulated SQLite failure")
-
-    monkeypatch.setattr(main_module, "add_pokemon_batch", fail_batch)
-
-    with pytest.raises(RuntimeError, match="simulated SQLite failure"):
-        main_module.import_gen1(str(path), "red")
-
-    save = fake_save_factory.instances[-1]
-    assert len(save.party_pokemon) == 1
-    assert len(save.box_pokemon) == 1
-    assert len(save.box_pokemon[0]) == 1
-    assert save.write_count == 0
+    assert web.client.get(response.location).status_code == 200
+    with web.client.session_transaction() as session:
+        token = session['last_export_token']
+        assert 'workflow_id' not in session
+    downloaded = web.client.get(f'/download/{token}')
+    assert downloaded.status_code == 200
+    assert downloaded.data == b'generated save'
+    assert 'original_chemspc.sav' in downloaded.headers['Content-Disposition']
+    assert not source.parent.exists()
+    assert [p.name for p in web.export_dir.iterdir()] == [f'{token}.sav']
+    # Generated outputs are restricted to the originating session.
+    other_client = web.main.app.test_client()
+    assert other_client.get(f'/download/{token}').status_code == 404
+    assert other_client.get(f'/result/{token}').status_code == 404
 
 
-@pytest.mark.parametrize(
-    ("game", "target"),
-    [
-        pytest.param("red", "import_gen1", id="gen1"),
-        pytest.param("silver", "import_gen2", id="gen2"),
-        pytest.param("emerald", "import_gen3", id="gen3"),
-        pytest.param("heartgold", "import_gen4", id="gen4"),
-        pytest.param("white2", "import_gen5", id="gen5"),
-        pytest.param("alphasapphire", "import_gen6", id="gen6"),
-        pytest.param("ultramoon", "import_gen7", id="gen7"),
-    ],
-)
-def test_cli_routes_explicit_game_to_correct_importer(
-    main_module, monkeypatch: pytest.MonkeyPatch, game: str, target: str
-) -> None:
-    spies = {
-        name: Mock()
-        for name in (
-            "import_gen1", "import_gen2", "import_gen3", "import_gen4",
-            "import_gen5", "import_gen6", "import_gen7",
-        )
-    }
-    for name, spy in spies.items():
-        monkeypatch.setattr(main_module, name, spy)
-    monkeypatch.setattr(sys, "argv", ["main.py", "sample.sav", "--game", game])
-
-    main_module.main()
-
-    spies[target].assert_called_once_with("sample.sav", game=game)
-    for name, spy in spies.items():
-        if name != target:
-            spy.assert_not_called()
+@pytest.mark.parametrize('game', GAME_SPECS)
+def test_upload_trims_trailer_before_parser_without_changing_input(web_app, game, tmp_path):
+    web = web_app
+    payload = b'A' * SAVE_SIZES[game] + b'emulator trailer'
+    original_file = tmp_path / 'original.sav'
+    original_file.write_bytes(payload)
+    with original_file.open('rb') as incoming:
+        response = web.post('/open-save', game=game, save_file=(incoming, 'test.sav'))
+    assert response.location.endswith('/manage')
+    assert web.opened[-1].path.read_bytes() == payload[:SAVE_SIZES[game]]
+    assert original_file.read_bytes() == payload
+    with web.client.session_transaction() as session:
+        assert any('trailing bytes' in message for _, message in session['_flashes'])
 
 
-def test_cli_auto_mode_uses_detected_generation_layout(
-    main_module, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(sys, "argv", ["main.py", "sample.sav"])
-    monkeypatch.setattr(
-        main_module, "detect_save_game", lambda _path: (6, "x", "generation-6")
-    )
-    importer = Mock()
-    monkeypatch.setattr(main_module, "import_gen6", importer)
-
-    main_module.main()
-
-    importer.assert_called_once_with(
-        "sample.sav", game="x", source_game="generation-6"
-    )
+@pytest.mark.parametrize('fields', [
+    {}, {'game': 'not-a-game'}, {'game': 'crystal'},
+])
+def test_invalid_upload_does_not_activate_workflow(web_app, fields):
+    response = web_app.post('/open-save', **fields)
+    assert response.location.endswith('/')
+    assert not web_app.opened
+    assert list(web_app.upload_dir.iterdir()) == []
+    with web_app.client.session_transaction() as session:
+        assert 'workflow_id' not in session
 
 
-def test_cli_help_exits_successfully(main_module, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-    monkeypatch.setattr(sys, "argv", ["main.py", "--help"])
+@pytest.mark.parametrize('failure', ['short', 'parser'])
+def test_failed_upload_is_cleaned_up(web_app, monkeypatch, failure):
+    if failure == 'parser':
+        def reject(*args):
+            raise ValueError('Invalid save checksum')
+        monkeypatch.setattr(web_app.main, 'open_save', reject)
+    response = web_app.upload(payload=b'short' if failure == 'short' else None)
+    assert response.location.endswith('/')
+    assert list(web_app.upload_dir.iterdir()) == []
+    assert not web_app.db.list_pokemon()
 
-    with pytest.raises(SystemExit) as exc:
-        main_module.main()
 
-    assert exc.value.code == 0
-    output = capsys.readouterr().out
-    assert "--game" in output
-    assert "save_file" in output
+@pytest.mark.parametrize('route', ['/open-save', '/finalize', '/cancel'])
+@pytest.mark.parametrize('token', [None, 'wrong-token'])
+def test_mutating_routes_require_session_csrf(web_app, route, token):
+    data = {} if token is None else {'csrf_token': token}
+    assert web_app.client.post(route, data=data).status_code == 400
+    assert not web_app.written
+    assert not web_app.db.list_pokemon()
+
+
+@pytest.mark.parametrize(('fields', 'message'), [
+    ({}, 'Select at least one'),
+    ({'import_slot': ['party:0', 'party:0']}, 'duplicate'),
+    ({'import_slot': 'box:99:0'}, 'no longer exist'),
+    ({'export_uid': 'not-an-integer'}, 'invalid database'),
+    ({'export_uid': '99999'}, 'no longer active'),
+])
+def test_invalid_selections_leave_save_and_database_unchanged(web_app, fields, message):
+    web = web_app
+    web.upload()
+    source = web.opened[-1].path
+    original = source.read_bytes()
+    response = web.post('/finalize', **fields)
+    assert response.location.endswith('/manage')
+    with web.client.session_transaction() as session:
+        assert any(message in text for _, text in session['_flashes'])
+        assert 'workflow_id' in session
+    assert source.read_bytes() == original
+    assert not web.db.list_pokemon()
+    assert not web.written
+    assert list(web.export_dir.iterdir()) == []
+
+
+def test_cross_generation_export_is_rejected_before_writing(web_app):
+    web = web_app
+    web.db.add_pokemon(native_pokemon(3, 'WrongGen'))
+    uid = web.db.list_pokemon()[0]['uid']
+    web.upload('crystal')
+    response = web.post('/finalize', import_slot='party:0', export_uid=str(uid))
+    assert response.location.endswith('/manage')
+    assert [row['uid'] for row in web.db.list_pokemon()] == [uid]
+    assert not web.db.list_pokemon(active=False)
+    assert not web.written
+
+
+@pytest.mark.parametrize('failure', ['database', 'publish', 'writer'])
+def test_failed_finalization_rolls_back_and_retains_staged_source(web_app, monkeypatch, failure):
+    web = web_app
+    web.db.add_pokemon(native_pokemon(2, 'ExportMon'))
+    uid = web.db.list_pokemon()[0]['uid']
+    web.upload()
+    source = web.opened[-1].path
+    original = source.read_bytes()
+    if failure == 'database':
+        # Fail after imports and the export move have executed, so rollback
+        # must undo changes to both tables.
+        real_move = web.db.move_active_to_inactive
+        def fail_move(connection, selected_uid):
+            real_move(connection, selected_uid)
+            raise sqlite3.IntegrityError('simulated database failure')
+        monkeypatch.setattr(web.db, 'move_active_to_inactive', fail_move)
+    elif failure == 'publish':
+        def fail_publish(*args):
+            raise OSError('simulated publish failure')
+        monkeypatch.setattr(web.main.os, 'replace', fail_publish)
+    else:
+        def fail_write(*args):
+            raise OSError('simulated writer failure')
+        monkeypatch.setattr(type(web.opened[-1]), 'write_save', fail_write)
+
+    response = web.post('/finalize', import_slot=['party:0', 'box:0:0'], export_uid=str(uid))
+    assert response.location.endswith('/manage')
+    assert [(row['uid'], row['name']) for row in web.db.list_pokemon()] == [(uid, 'ExportMon')]
+    assert not web.db.list_pokemon(active=False)
+    assert source.read_bytes() == original
+    assert not Path(str(source) + '.new').exists()
+    assert list(web.export_dir.iterdir()) == []
+    with web.client.session_transaction() as session:
+        assert 'workflow_id' in session
+        assert 'last_export_token' not in session
+
+
+def test_cancel_discards_only_staged_workflow(web_app):
+    web = web_app
+    web.db.add_pokemon(native_pokemon(2, 'Stored'))
+    web.upload()
+    source = web.opened[-1].path
+    response = web.post('/cancel')
+    assert response.location.endswith('/')
+    assert not source.parent.exists()
+    assert [row['name'] for row in web.db.list_pokemon()] == ['Stored']
+    assert not web.written
+    assert web.client.get('/manage').location.endswith('/')
+
+
+@pytest.mark.parametrize('route', ['/result/not-a-token', '/download/not-a-token',
+                                   '/result/' + 'a' * 32, '/download/' + 'a' * 32])
+def test_unknown_downloads_and_results_are_not_found(web_app, route):
+    assert web_app.client.get(route).status_code == 404

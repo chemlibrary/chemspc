@@ -10,11 +10,18 @@ import pytest
 from pokemon import Pokemon
 
 
-def test_database_exposes_batch_insert_required_by_main(db_module) -> None:
-    """The CLI depends on one transaction for an entire save extraction."""
-    assert callable(getattr(db_module, "add_pokemon_batch", None)), (
-        "main.py imports db.add_pokemon_batch, but db.py does not expose it"
-    )
+def test_insert_participates_in_callers_transaction(db_module) -> None:
+    """Finalization owns the transaction across both imports and exports."""
+    db_module.init_tables()
+    with db_module.connect() as connection:
+        connection.execute('BEGIN IMMEDIATE')
+        uid = db_module.insert_pokemon(connection, Pokemon(generation=2, name='Pikachu', species=25))
+        assert uid > 0
+        assert connection.execute('SELECT COUNT(*) FROM pokemon').fetchone()[0] == 1
+        # insert_pokemon must neither commit nor use an independent connection.
+        assert db_module.list_pokemon() == []
+        connection.rollback()
+    assert db_module.list_pokemon() == []
 
 
 def test_table_initialization_is_idempotent(db_module) -> None:
@@ -150,8 +157,8 @@ def test_move_unknown_uid_raises_clear_error(db_module) -> None:
         connection.close()
 
 
-def test_add_pokemon_batch_inserts_the_full_batch(db_module) -> None:
-    """A successful import stores every Pokémon in the single supplied batch."""
+def test_transaction_inserts_multiple_pokemon(db_module) -> None:
+    """The caller commits every selected import together."""
     db_module.init_tables()
     batch = [
         Pokemon(generation=1, name="Bulbasaur", species=1),
@@ -159,28 +166,28 @@ def test_add_pokemon_batch_inserts_the_full_batch(db_module) -> None:
         Pokemon(generation=3, name="Mudkip", species=258),
     ]
 
-    batch_insert = getattr(db_module, "add_pokemon_batch", None)
-    if not callable(batch_insert):
-        pytest.skip("add_pokemon_batch is missing; see the API contract test above")
-    batch_insert(batch)
+    with db_module.connect() as connection:
+        connection.execute('BEGIN IMMEDIATE')
+        uids = [db_module.insert_pokemon(connection, pokemon) for pokemon in batch]
+
+    assert len(set(uids)) == len(batch)
 
     assert [row["name"] for row in db_module.list_pokemon()] == [
         "Bulbasaur", "Cyndaquil", "Mudkip"
     ]
 
 
-def test_add_pokemon_batch_rolls_back_if_one_record_cannot_be_encoded(db_module) -> None:
+def test_transaction_rolls_back_if_one_record_cannot_be_encoded(db_module) -> None:
     """A bad later record must not leave a partially inserted extraction."""
     db_module.init_tables()
     first = Pokemon(generation=1, name="Bulbasaur", species=1)
     second = Pokemon(generation=2, name="Cyndaquil", species=155)
     second.unsupported_metadata = object()
 
-    batch_insert = getattr(db_module, "add_pokemon_batch", None)
-    if not callable(batch_insert):
-        pytest.skip("add_pokemon_batch is missing; see the API contract test above")
-
     with pytest.raises(TypeError, match="Unsupported Pokémon metadata value"):
-        batch_insert([first, second])
+        with db_module.connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            db_module.insert_pokemon(connection, first)
+            db_module.insert_pokemon(connection, second)
 
     assert db_module.list_pokemon() == []

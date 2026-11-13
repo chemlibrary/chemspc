@@ -9,6 +9,9 @@
 !templates/**
 !static/
 !static/**
+!data/
+!data/pokemon_names/
+!data/pokemon_names/**
 !docker/
 !docker/entrypoint.py
 !LICENSE

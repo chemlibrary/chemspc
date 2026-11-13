@@ -46,7 +46,7 @@
   <div class="panel-heading"><div><div class="eyebrow">YOUR COLLECTION</div><h2>Active database Pokémon</h2></div><span class="count-pill">{{ active|length }} Pokémon</span></div>
   {% if active %}
   <div class="table-wrap"><table><thead><tr><th>Pokémon</th><th>Species ID</th><th>Gen</th><th>Held item / Gen I catch rate</th><th>Moves</th></tr></thead><tbody>
-  {% for p in active %}<tr><td><strong>{{ p.name or 'Unnamed' }}</strong><small class="subline">UID {{ p.uid }} · Lv. {{ p.level if p.level is not none else 'stored' }}</small></td><td>#{{ p.species }}</td><td><span class="tag">{{ p.generation }}</span></td><td>{{ p.held_item }}</td><td class="move-cell">{{ [p.move1, p.move2, p.move3, p.move4]|select('ne', 0)|join(', ') or '—' }}</td></tr>{% endfor %}
+  {% for p in active %}<tr><td><strong>{{ p.name or 'Unnamed' }}</strong><small class="subline">UID {{ p.uid }} · Lv. {{ p.level if p.level is not none else 'stored' }}</small></td><td>#{{ p.species }}</td><td><span class="tag">{{ p.generation }}</span></td><td>{{ p.held_item|item_name(p.generation) }}</td><td class="move-cell">{{ [p.move1, p.move2, p.move3, p.move4]|move_names(p.generation)|join(', ') or '—' }}</td></tr>{% endfor %}
   </tbody></table></div>
   {% else %}<div class="empty-state"><div class="empty-icon" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div><strong>A little room for your next adventure.</strong><p>Your storage is empty. Open a save file to bring your Pokémon here.</p></div>{% endif %}
 </section>
