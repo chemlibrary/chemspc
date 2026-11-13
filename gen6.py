@@ -46,6 +46,7 @@ except ModuleNotFoundError:
 
 from gen4 import crc16_ccitt
 from pokemon import Pokemon
+from experience import level_from_experience
 
 XY_SAVE_SIZE = 0x65600
 ORAS_SAVE_SIZE = 0x76000
@@ -243,7 +244,8 @@ def _parse_pokemon(
     shiny_value = ((pid & 0xFFFF) ^ (pid >> 16) ^ tid ^ sid)
     is_shiny = shiny_value < 16
 
-    level = status = current_hp = max_hp = attack = defense = speed = sp_attack = sp_defense = None
+    level = level_from_experience(6, species, exp)
+    status = current_hp = max_hp = attack = defense = speed = sp_attack = sp_defense = None
     if party:
         status = _u32(logical, 0xE8)
         level = logical[0xEC]

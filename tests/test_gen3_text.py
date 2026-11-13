@@ -38,6 +38,10 @@ class Gen3GenderTextTests(unittest.TestCase):
                 self.assertEqual({p.name for p in nidorans}, {'NIDORAN♀', 'NIDORAN♂'})
                 self.assertEqual(len(save.party_pokemon), 6)
                 self.assertEqual(sum(map(len, save.box_pokemon)), 82)
+                boxed = [p for box in save.box_pokemon for p in box]
+                self.assertTrue(all(isinstance(p.level, int) and 1 <= p.level <= 100 for p in boxed))
+                self.assertEqual([(p.name, p.level) for p in boxed[:3]],
+                                 [('PIDGEY', 3), ('NIDORAN♀', 6), ('ZUBAT', 8)])
                 original_records = [p.gen3_box_record for p in pokemon]
                 output = save.write_save()
                 reloaded = Gen3_Save(output, game='firered')

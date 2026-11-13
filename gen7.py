@@ -42,6 +42,7 @@ except ModuleNotFoundError:
 from gen4 import crc16_ccitt
 from gen6 import _parse_pokemon as _parse_gen6_pokemon, decrypt_gen6_record
 from pokemon import Pokemon
+from experience import level_from_experience
 
 SM_SAVE_SIZE = 0x6BE00
 USUM_SAVE_SIZE = 0x6CC00
@@ -147,6 +148,8 @@ def _parse_pokemon(
     if pokemon is None:
         return None
     pokemon.generation = 7
+    if not party:
+        pokemon.level = level_from_experience(7, pokemon.species, pokemon.exp)
     pokemon.game_name = game_name
     pokemon.gen7_record = bytes(record)
     pokemon.gen7_party_slot = party_slot

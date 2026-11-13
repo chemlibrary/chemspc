@@ -41,6 +41,7 @@ except ModuleNotFoundError:
         os.replace(temporary, destination)
 
 from pokemon import Pokemon
+from experience import level_from_experience
 
 SAVE_SIZE = 0x20000             # 128 KiB
 SECTOR_SIZE = 0x1000             # 4096 bytes
@@ -308,7 +309,7 @@ def _decode_gen3_record(raw: bytes, *, party_record: bool) -> Pokemon | None:
         pokemon.gen3_party_record = bytes(raw)
     else:
         # Box records store EXP, but not calculated level or battle stats.
-        pokemon.level = None
+        pokemon.level = level_from_experience(3, species, experience)
         pokemon.status_condition = 0
         pokemon.current_hp = 0
         pokemon.max_hp = 0

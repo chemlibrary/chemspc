@@ -41,6 +41,7 @@ except ModuleNotFoundError:
 
 from gen4 import crc16_ccitt, decode_gen4_text
 from pokemon import Pokemon
+from experience import level_from_experience
 
 SAVE_SIZE = 0x80000
 PARTY_BLOCK_START = 0x18E00
@@ -205,9 +206,8 @@ def _parse_pokemon(
         sp_attack = _u16(stats, 16)
         sp_defense = _u16(stats, 18)
     else:
-        # A boxed PK5 does not contain calculated party battle stats or level.
-        # Keep them NULL in SQLite rather than implying that the Pokémon is level 0.
-        level = None
+        # A boxed PK5 stores EXP; calculate level without inventing battle stats.
+        level = level_from_experience(5, species, exp)
         status = current_hp = max_hp = attack = defense = speed = sp_attack = sp_defense = None
 
     is_egg = bool(iv_word & (1 << 30))

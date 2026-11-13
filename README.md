@@ -12,6 +12,7 @@ ChemsPC is intended for personal, local use. It is not a save editor for arbitra
 - An explicit **Finalize** step. Selections are staged until finalization.
 - Separate active (`pokemon`) and inactive (`inactive_pokemon`) database tables. An exported Pokémon is moved from the active table to the inactive table, retaining its database UID and stored record data.
 - Generation-specific save readers and writers for supported Generations I–VII formats.
+- Boxed Pokémon levels across all supported games: Generations I/II retain their stored levels; Generations III–VII calculate them from experience and species growth rates. Older database entries with missing levels are calculated when displayed, without changing their stored records.
 - Upload normalization: trailing bytes after the expected raw save length are trimmed from the server-side staged upload. Files that are too short are rejected rather than padded.
 - Retention of generation-native Pokémon record data in SQLite where the format requires the original record for safe export.
 - Checksum-aware save output using the corresponding generation handler.

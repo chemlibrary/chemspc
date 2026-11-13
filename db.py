@@ -110,7 +110,22 @@ def _pokemon_values(pokemon: Pokemon) -> tuple:
 
 def row_to_pokemon(row: sqlite3.Row | dict) -> Pokemon:
     pokemon = Pokemon(**{column: row[column] for column in POKEMON_COLUMNS})
-    return restore_record_payload(pokemon, row.get("record_payload") if isinstance(row, dict) else row["record_payload"])
+    pokemon = restore_record_payload(pokemon, row.get("record_payload") if isinstance(row, dict) else row["record_payload"])
+    pokemon.level = _display_level(vars(pokemon))
+    return pokemon
+
+
+def _display_level(record: dict) -> int | None:
+    """Fill missing levels on read, including older stored records."""
+    level = record.get("level")
+    if level is not None:
+        return level
+    from experience import level_from_experience
+    generation = record.get("generation")
+    species, exp = record.get("species"), record.get("exp")
+    if not isinstance(species, int) or not isinstance(exp, int) or exp < 0:
+        return level
+    return level_from_experience(generation, species, exp)
 
 
 def add_pokemon(pokemon: Pokemon) -> bool:
@@ -140,7 +155,10 @@ def list_pokemon(active: bool = True) -> list[dict]:
         rows = conn.execute(
             f"SELECT uid, {', '.join(POKEMON_COLUMNS)}, record_payload FROM {table} ORDER BY uid"
         ).fetchall()
-        return [dict(row) for row in rows]
+        records = [dict(row) for row in rows]
+        for record in records:
+            record["level"] = _display_level(record)
+        return records
     finally:
         conn.close()
 
